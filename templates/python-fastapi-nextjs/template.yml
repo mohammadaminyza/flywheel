@@ -1,0 +1,23 @@
+id: python-fastapi-nextjs
+name: FastAPI + Next.js
+description: >
+  Layered FastAPI backend (route -> service -> aggregate + repository -> ORM) with a
+  Next.js App Router frontend, pytest, alembic, Docker and GitHub Actions for per-pull-request
+  dev environments plus tag-driven stage and production releases.
+stack:
+  backend: fastapi
+  frontend: nextjs
+ports:
+  backend: 80
+  frontend: 3000
+health: /api/v1/health
+envs:
+  dev:
+    backend: 8120
+    frontend: 3120
+  stage:
+    backend: 8110
+    frontend: 3110
+  prod:
+    backend: 8100
+    frontend: 3100

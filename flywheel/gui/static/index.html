@@ -1,0 +1,1378 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Flywheel</title>
+    <style>
+        :root {
+            --bg: #0a0d13;
+            --surface: #111621;
+            --surface-2: #161c29;
+            --surface-3: #1d2532;
+            --border: #232c3d;
+            --border-2: #2e3a4f;
+            --text: #eaeef6;
+            --muted: #8b95a7;
+            --faint: #5b6576;
+            --accent: #6366f1;
+            --accent-2: #8b5cf6;
+            --accent-hover: #7c7ff5;
+            --ok: #22c55e;
+            --warn: #f59e0b;
+            --bad: #ef4444;
+            --shadow: 0 8px 30px rgba(0, 0, 0, .35);
+            --shadow-sm: 0 2px 10px rgba(0, 0, 0, .25);
+            --r: 14px;
+            --r-sm: 10px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            background: radial-gradient(1200px 600px at 100% -10%, rgba(99, 102, 241, .10), transparent 60%),
+            radial-gradient(900px 500px at -10% 110%, rgba(139, 92, 246, .08), transparent 55%),
+            var(--bg);
+            color: var(--text);
+            font: 14.5px/1.55 "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            display: grid;
+            grid-template-columns: 232px 1fr;
+            min-height: 100vh;
+        }
+
+        a {
+            color: var(--accent-hover);
+        }
+
+        svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            flex: none;
+        }
+
+        /* Sidebar */
+        aside {
+            background: linear-gradient(180deg, var(--surface), var(--bg));
+            border-right: 1px solid var(--border);
+            padding: 22px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            padding: 4px 8px 20px;
+        }
+
+        .brand .mark {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            flex: none;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            display: grid;
+            place-items: center;
+            box-shadow: 0 6px 18px rgba(99, 102, 241, .4);
+        }
+
+        .brand .mark svg {
+            width: 19px;
+            height: 19px;
+            stroke: #fff;
+        }
+
+        .brand b {
+            font-size: 14.5px;
+            letter-spacing: .2px;
+            line-height: 1.15;
+        }
+
+        .brand small {
+            display: block;
+            color: var(--muted);
+            font-size: 11.5px;
+            font-weight: 400;
+        }
+
+        .navlink {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            padding: 10px 12px;
+            border-radius: var(--r-sm);
+            color: var(--muted);
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            transition: .12s;
+            user-select: none;
+        }
+
+        .navlink:hover {
+            background: var(--surface-2);
+            color: var(--text);
+        }
+
+        .navlink.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, .18), rgba(139, 92, 246, .12));
+            color: var(--text);
+            box-shadow: inset 0 0 0 1px var(--border-2);
+        }
+
+        .navlink .count {
+            margin-left: auto;
+            background: var(--accent);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 1px 8px;
+            border-radius: 999px;
+        }
+
+        .sidefoot {
+            margin-top: auto;
+            padding: 12px 8px 0;
+            border-top: 1px solid var(--border);
+        }
+
+        .looprow {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+
+        .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--faint);
+            flex: none;
+        }
+
+        .dot.on {
+            background: var(--ok);
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, .15);
+            animation: pulse 2s infinite;
+        }
+
+        .dot.err {
+            background: var(--bad);
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, .15);
+        }
+
+        @keyframes pulse {
+            50% {
+                opacity: .55;
+            }
+        }
+
+        /* Main */
+        main {
+            padding: 30px 40px;
+            max-width: 980px;
+        }
+
+        .head {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .head h1 {
+            font-size: 22px;
+            margin: 0;
+            font-weight: 650;
+            letter-spacing: -.2px;
+        }
+
+        .head p {
+            margin: 3px 0 0;
+            color: var(--muted);
+            font-size: 13.5px;
+        }
+
+        .head .spacer {
+            flex: 1;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            color: #fff;
+            border: none;
+            padding: 10px 18px;
+            border-radius: var(--r-sm);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: .14s;
+            box-shadow: 0 6px 16px rgba(99, 102, 241, .28);
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 22px rgba(99, 102, 241, .36);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn.ghost {
+            background: var(--surface-2);
+            color: var(--text);
+            box-shadow: none;
+            border: 1px solid var(--border-2);
+        }
+
+        .btn.ghost:hover {
+            background: var(--surface-3);
+            box-shadow: none;
+        }
+
+        .btn.stop {
+            background: linear-gradient(135deg, #ef4444, #f97316);
+            box-shadow: 0 6px 16px rgba(239, 68, 68, .3);
+        }
+
+        .btn:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn.sm {
+            padding: 8px 14px;
+            font-size: 13px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--r);
+            padding: 22px 24px;
+            margin-bottom: 18px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .card > h2 {
+            margin: 0 0 3px;
+            font-size: 15.5px;
+            font-weight: 620;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .card > h2 .num {
+            width: 22px;
+            height: 22px;
+            border-radius: 7px;
+            background: var(--surface-3);
+            display: grid;
+            place-items: center;
+            font-size: 12px;
+            color: var(--muted);
+            border: 1px solid var(--border-2);
+        }
+
+        .card > p.sub {
+            margin: 0 0 16px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .field {
+            margin-bottom: 14px;
+        }
+
+        .field:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-size: 12.5px;
+            color: var(--muted);
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .control {
+            position: relative;
+        }
+
+        input, select {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border-2);
+            color: var(--text);
+            padding: 11px 13px;
+            border-radius: var(--r-sm);
+            font-size: 14px;
+            transition: .14s;
+            font-family: inherit;
+        }
+
+        input::placeholder {
+            color: var(--faint);
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, .18);
+        }
+
+        input.ok {
+            border-color: var(--ok);
+        }
+
+        input.bad {
+            border-color: var(--bad);
+        }
+
+        .msg {
+            font-size: 12.5px;
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 17px;
+        }
+
+        .msg.ok {
+            color: var(--ok);
+        }
+
+        .msg.bad {
+            color: var(--bad);
+        }
+
+        .msg.muted {
+            color: var(--muted);
+        }
+
+        .msg svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .row > .field {
+            flex: 1;
+        }
+
+        .inline {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .inline > .field {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        /* Readiness */
+        .ready {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .ring {
+            --p: 0;
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            flex: none;
+            background: conic-gradient(var(--ok) calc(var(--p) * 1%), var(--surface-3) 0);
+            display: grid;
+            place-items: center;
+            transition: .5s;
+        }
+
+        .ring::before {
+            content: "";
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--surface);
+            position: absolute;
+        }
+
+        .ring b {
+            position: relative;
+            font-size: 14px;
+        }
+
+        .ready .lbl b {
+            font-size: 15px;
+        }
+
+        .ready .lbl div {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .checks {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 20px;
+            margin-top: 4px;
+        }
+
+        .check {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            font-size: 13px;
+            padding: 3px 0;
+        }
+
+        .badge {
+            width: 20px;
+            height: 20px;
+            border-radius: 6px;
+            display: grid;
+            place-items: center;
+            flex: none;
+        }
+
+        .badge.ok {
+            background: rgba(34, 197, 94, .16);
+            color: var(--ok);
+        }
+
+        .badge.bad {
+            background: rgba(239, 68, 68, .16);
+            color: var(--bad);
+        }
+
+        .badge.opt {
+            background: rgba(245, 158, 11, .16);
+            color: var(--warn);
+        }
+
+        .badge svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .check .nm {
+            font-weight: 500;
+        }
+
+        .check .dt {
+            color: var(--faint);
+            font-size: 12px;
+            margin-left: auto;
+        }
+
+        /* Dashboard */
+        .stats {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .stat {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--r-sm);
+            padding: 14px 18px;
+            flex: 1;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .stat b {
+            font-size: 24px;
+            font-weight: 680;
+            letter-spacing: -.5px;
+        }
+
+        .stat span {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .cols {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        .col {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--r);
+            padding: 13px;
+            min-height: 130px;
+        }
+
+        .col h3 {
+            font-size: 11.5px;
+            text-transform: uppercase;
+            letter-spacing: .6px;
+            color: var(--muted);
+            margin: 0 0 11px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .col h3 .c {
+            margin-left: auto;
+            background: var(--surface-3);
+            border-radius: 999px;
+            padding: 0 7px;
+            font-size: 11px;
+        }
+
+        .run {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--r-sm);
+            padding: 11px 12px;
+            margin-bottom: 9px;
+            font-size: 13px;
+            transition: .12s;
+        }
+
+        .run:hover {
+            border-color: var(--border-2);
+            transform: translateX(2px);
+        }
+
+        .run .t {
+            font-weight: 600;
+        }
+
+        .run .m {
+            color: var(--muted);
+            font-size: 11.5px;
+            margin-top: 4px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .run .chip {
+            background: var(--surface-3);
+            border-radius: 5px;
+            padding: 1px 6px;
+            font-size: 10.5px;
+        }
+
+
+        .run .errline {
+            color: var(--bad);
+            font-size: 11px;
+            margin-top: 6px;
+        }
+        .empty {
+            color: var(--faint);
+            font-size: 12.5px;
+            font-style: italic;
+            padding: 6px 2px;
+        }
+
+        /* Questions */
+        .q {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--r);
+            padding: 20px 22px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .q .h {
+            font-weight: 620;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .q .h .tag {
+            background: rgba(245, 158, 11, .16);
+            color: var(--warn);
+            font-size: 11px;
+            padding: 2px 9px;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+
+        .q ol {
+            margin: 4px 0 14px;
+            padding-left: 20px;
+            color: var(--text);
+        }
+
+        .q ol li {
+            margin: 4px 0;
+        }
+
+        textarea {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border-2);
+            color: var(--text);
+            border-radius: var(--r-sm);
+            padding: 12px 13px;
+            font-size: 14px;
+            min-height: 84px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, .18);
+        }
+
+        .spin {
+            width: 15px;
+            height: 15px;
+            border: 2px solid rgba(255, 255, 255, .25);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: sp .7s linear infinite;
+        }
+
+        @keyframes sp {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 26px;
+            right: 26px;
+            background: var(--surface-2);
+            border: 1px solid var(--border-2);
+            padding: 13px 18px;
+            border-radius: var(--r-sm);
+            font-size: 14px;
+            box-shadow: var(--shadow);
+            transform: translateY(20px);
+            opacity: 0;
+            transition: .25s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 50;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.ok {
+            border-color: rgba(34, 197, 94, .5);
+        }
+
+        .toast.bad {
+            border-color: rgba(239, 68, 68, .5);
+        }
+
+        .hide {
+            display: none !important;
+        }
+
+        @media (max-width: 720px) {
+            body {
+                grid-template-columns: 1fr;
+            }
+
+            aside {
+                display: none;
+            }
+
+            .cols {
+                grid-template-columns: 1fr;
+            }
+
+            .checks {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<aside>
+    <div class="brand">
+        <div class="mark">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/>
+                <circle cx="12" cy="12" r="3.2"/>
+            </svg>
+        </div>
+        <div><b>Flywheel</b><small>autonomous builds</small></div>
+    </div>
+    <div class="navlink active" data-view="setup" onclick="show('setup')">
+        <svg viewBox="0 0 24 24">
+            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+        Setup
+    </div>
+    <div class="navlink" data-view="dashboard" onclick="show('dashboard')">
+        <svg viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="9"/>
+            <rect x="14" y="3" width="7" height="5"/>
+            <rect x="14" y="12" width="7" height="9"/>
+            <rect x="3" y="16" width="7" height="5"/>
+        </svg>
+        Dashboard
+    </div>
+    <div class="navlink" data-view="questions" onclick="show('questions')">
+        <svg viewBox="0 0 24 24">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+        Questions <span class="count hide" id="qCount">0</span></div>
+    <div class="sidefoot">
+        <div class="looprow"><span class="dot" id="loopDot"></span><span id="loopLabel">loop paused</span></div>
+        <button class="btn sm" id="loopBtn" style="width:100%; justify-content:center" onclick="toggleLoop()">
+            <svg viewBox="0 0 24 24">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <span>Start loop</span></button>
+    </div>
+</aside>
+
+<main>
+    <!-- SETUP -->
+    <section id="setup">
+        <div class="head">
+            <div><h1>Setup</h1>
+                <p>Connect GitHub and pick a board. Each field is checked as you go.</p></div>
+        </div>
+
+        <div class="card">
+            <div class="ready">
+                <div class="ring" id="ring"><b id="ringPct">0%</b></div>
+                <div class="lbl"><b id="readyTitle">Checking your machine…</b>
+                    <div id="readySub">Docker, agents, tokens and templates</div>
+                </div>
+            </div>
+            <div class="checks" id="checks"></div>
+        </div>
+
+        <div class="card">
+            <h2><span class="num">1</span> GitHub access</h2>
+            <p class="sub">A personal access token with <b>repo</b> and <b>project</b> scopes. Stored locally in <code>~/.flywheel</code>.
+            </p>
+            <div class="field">
+                <label>Personal access token</label>
+                <div class="inline">
+                    <div class="field">
+                        <div class="control"><input type="password" id="token" placeholder="ghp_… or github_pat_…"
+                                                    oninput="onTokenInput()" onfocus="unmask('token')"
+                                                    onblur="remask('token')"/></div>
+                    </div>
+                    <button class="btn ghost" id="tokenBtn" onclick="testToken()"><span>Test</span></button>
+                </div>
+                <div class="msg muted" id="tokenMsg"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><span class="num">2</span> Project board</h2>
+            <p class="sub">The GitHub Projects board the factory watches for work.</p>
+            <div class="inline">
+                <div class="field"><label>Owner (user or org)</label><input id="owner" placeholder="your-username"
+                                                                            oninput="onOwnerInput()"/></div>
+                <button class="btn ghost" id="boardsBtn" onclick="loadBoards()" disabled><span>Load boards</span>
+                </button>
+            </div>
+            <div class="field" style="margin-top:14px">
+                <label>Board</label>
+                <select id="board" onchange="validate()" disabled>
+                    <option value="">— load boards first —</option>
+                </select>
+                <div class="msg muted" id="boardMsg"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><span class="num">3</span> Agents &amp; options</h2>
+            <div class="row">
+                <div class="field"><label>Default agent (cards with no Agent field)</label>
+                    <select id="defaultAgent">
+                        <option value="claude-code">Claude Code</option>
+                        <option value="codex">Codex</option>
+                    </select></div>
+                <div class="field"><label>Default template (empty repos)</label><select id="template"></select></div>
+                <div class="field"><label>Tasks at once</label><input id="maxParallel" type="number" min="1" value="2"/>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><span class="num">4</span> Docker host &amp; preview environments <span
+                    style="color:var(--faint);font-weight:400;font-size:12px">optional</span></h2>
+            <p class="sub">A Docker host reached over SSH gives every pull request a live URL and screenshots. Leave
+                blank to skip previews.</p>
+            <div class="row">
+                <div class="field"><label>Docker host</label><input id="depHost" placeholder="deploy.example.com"/>
+                </div>
+                <div class="field"><label>SSH user</label><input id="depUser" placeholder="deploy"/></div>
+            </div>
+            <div class="row">
+                <div class="field"><label>Authentication</label>
+                    <select id="depAuth" onchange="toggleDepAuth()">
+                        <option value="key">SSH key</option>
+                        <option value="password">Username &amp; password</option>
+                    </select></div>
+                <div class="field"><label>Wildcard domain</label><input id="depDomain" placeholder="example.com"/></div>
+            </div>
+            <div class="field" id="depKeyField"><label>SSH key path</label><input id="depKey"
+                                                                                  placeholder="~/.ssh/id_ed25519"/>
+            </div>
+            <div class="field hide" id="depPassField"><label>SSH password</label><input type="password" id="depPass"
+                                                                                        placeholder="password for the SSH user"
+                                                                                        oninput="markDepDirty()"
+                                                                                        onfocus="unmask('depPass')"
+                                                                                        onblur="remask('depPass')"/>
+            </div>
+            <div class="inline" style="margin-top:12px">
+                <button class="btn ghost sm" id="depBtn" onclick="testDeploy()"><span>Test connection</span></button>
+                <div class="msg muted" id="depMsg" style="flex:1"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><span class="num">5</span> Notifications <span
+                    style="color:var(--faint);font-weight:400;font-size:12px">optional</span></h2>
+            <p class="sub">Get the preview link and screenshots on Telegram when a PR is ready. Paste your bot token,
+                then <b>message your bot once</b> (press Start) and enter your @username — Flywheel finds your chat id
+                automatically. Or paste a numeric chat id directly.</p>
+            <div class="field"><label>Telegram bot token</label><input type="password" id="tgToken"
+                                                                       placeholder="from @BotFather"
+                                                                       oninput="markTgDirty()"
+                                                                       onfocus="unmask('tgToken')"
+                                                                       onblur="remask('tgToken')"/></div>
+            <div class="row">
+                <div class="field"><label>Chat id</label><input id="tgChat" placeholder="123456789"/></div>
+                <div class="field"><label>… or @username</label><input id="tgUser" placeholder="@yourhandle"/></div>
+            </div>
+            <div class="inline" style="margin-top:12px">
+                <button class="btn ghost sm" id="tgBtn" onclick="testTelegram()"><span>Send test message</span></button>
+                <div class="msg muted" id="tgMsg" style="flex:1"></div>
+            </div>
+        </div>
+
+        <div class="head">
+            <div class="spacer"></div>
+            <div class="msg muted" id="saveMsg" style="margin-right:16px"></div>
+            <button class="btn" id="saveBtn" onclick="saveConfig()" disabled><span>Save configuration</span></button>
+        </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="hide">
+        <div class="head">
+            <div><h1>Dashboard</h1>
+                <p id="dbBoard">no board connected</p></div>
+            <div class="spacer"></div>
+            <div class="msg muted" id="dbEvent"></div>
+        </div>
+        <div id="loopErr" class="card hide"
+             style="border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.06)"></div>
+        <div id="boardWarn" class="card hide"
+             style="border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.05)"></div>
+        <div class="stats">
+            <div class="stat"><b id="stActive">0</b><span>active now</span></div>
+            <div class="stat"><b id="stWaiting">0</b><span>waiting on you</span></div>
+            <div class="stat"><b id="stShipped">0</b><span>shipped</span></div>
+            <div class="stat"><b id="stCost">$0.00</b><span>total cost</span></div>
+        </div>
+        <div class="cols" id="cols"></div>
+    </section>
+
+    <!-- QUESTIONS -->
+    <section id="questions" class="hide">
+        <div class="head">
+            <div><h1>Questions</h1>
+                <p>Answer an agent and it resumes on the next poll.</p></div>
+        </div>
+        <div id="qList"></div>
+    </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+    const $ = (id) => document.getElementById(id);
+    const ICON = {
+        check: '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
+        x: '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+        warn: '<svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    };
+    const state = {tokenOk: null, tokenSaved: false, owner: "", boards: [], boardVal: ""};
+
+    async function api(path, opts) {
+        const r = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opts});
+        if (!r.ok) {
+            const e = await r.json().catch(() => ({detail: r.statusText}));
+            throw new Error(e.detail || r.statusText);
+        }
+        return r.json();
+    }
+
+    function toast(msg, kind) {
+        const t = $("toast");
+        t.innerHTML = (kind === "ok" ? ICON.check : kind === "bad" ? ICON.x : "") + `<span>${msg}</span>`;
+        t.className = "toast show " + (kind || "");
+        setTimeout(() => t.className = "toast", 2800);
+    }
+
+    function show(view) {
+        ["setup", "dashboard", "questions"].forEach(s => $(s).classList.toggle("hide", s !== view));
+        document.querySelectorAll(".navlink").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+        if (view === "dashboard") refreshRuns();
+        if (view === "questions") refreshQuestions();
+    }
+
+    function setMsg(id, text, kind) {
+        const e = $(id);
+        e.className = "msg " + (kind || "muted");
+        e.innerHTML = (kind === "ok" ? ICON.check : kind === "bad" ? ICON.x : "") + `<span>${text || ""}</span>`;
+    }
+
+    // ---- secret masking ----
+    // Saved secrets show a dot mask so the field looks filled. A field still holding
+    // the mask is treated as "unchanged" and never sent back as a new value.
+    const MASK = "••••••••••••";
+
+    function maskSecret(id, saved) {
+        const el = $(id);
+        el.dataset.saved = saved ? "1" : "";
+        el.value = saved ? MASK : "";
+    }
+
+    function unmask(id) {
+        const el = $(id);
+        if (el.value === MASK) el.value = "";
+    }
+
+    function remask(id) {
+        const el = $(id);
+        if (!el.value && el.dataset.saved === "1") el.value = MASK;
+    }
+
+    function secretValue(id) {
+        const v = $(id).value;
+        return (v && v !== MASK) ? v : undefined;
+    }
+
+    // ---- validation ----
+    const PAT = /^(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})$/;
+
+    function onTokenInput() {
+        const el = $("token");
+        const v = el.value;
+        el.classList.remove("ok", "bad");
+        state.tokenOk = null;
+        if (v === MASK) {
+            setMsg("tokenMsg", "A token is already saved — click to replace it.", "muted");
+            validate();
+            return;
+        }
+        const t = v.trim();
+        if (!t) {
+            setMsg("tokenMsg", state.tokenSaved ? "A token is already saved — leave blank to keep it." : "", "muted");
+        } else if (!PAT.test(t)) {
+            setMsg("tokenMsg", "That doesn't look like a GitHub token — check you copied all of it.", "muted");
+        } else {
+            setMsg("tokenMsg", "Looks valid. Click Test to verify with GitHub.", "muted");
+        }
+        validate();
+    }
+
+    function onOwnerInput() {
+        state.owner = $("owner").value.trim();
+        $("boardsBtn").disabled = !state.owner;
+        validate();
+    }
+
+    function validate() {
+        const board = $("board");
+        state.boardVal = board.value;
+        const ready = (state.tokenOk || state.tokenSaved) && !!state.owner;
+        $("saveBtn").disabled = !ready;
+        $("saveBtn").querySelector("span").textContent = state.boardVal ? "Save configuration" : "Save (board optional)";
+    }
+
+    async function loadConfig() {
+        const c = await api("/api/config");
+        $("owner").value = c.owner || "";
+        state.owner = c.owner || "";
+        $("maxParallel").value = c.max_parallel || 2;
+        $("defaultAgent").value = c.default_agent || "claude-code";
+        $("dbBoard").textContent = c.project_title ? "board · " + c.project_title : "no board connected";
+        const bsel = $("board");
+        if (c.project_number && !state.boards.length) {
+            bsel.innerHTML = `<option value="${c.project_number}" data-t="${c.project_title || ""}">#${c.project_number}  ${c.project_title || ""} (saved)</option>`;
+            bsel.disabled = false;
+            bsel.value = String(c.project_number);
+            state.boardVal = bsel.value;
+            setMsg("boardMsg", "Showing your saved board. Click Load boards to change it.", "muted");
+        }
+        const t = $("template");
+        t.innerHTML = "";
+        (c.templates || []).forEach(x => {
+            const o = document.createElement("option");
+            o.value = o.textContent = x;
+            if (x === c.default_template) o.selected = true;
+            t.appendChild(o);
+        });
+        $("depHost").value = c.deploy_host || "";
+        $("depUser").value = c.deploy_user || "";
+        $("depKey").value = c.deploy_ssh_key_path || "";
+        $("depDomain").value = c.deploy_domain || "";
+        $("depAuth").value = c.deploy_auth_method || "key";
+        toggleDepAuth();
+        maskSecret("depPass", c.deploy_ssh_password_set);
+        state.depDirty = false;
+        $("tgChat").value = c.telegram_chat_id || "";
+        $("tgUser").value = c.telegram_username || "";
+        maskSecret("tgToken", c.telegram_bot_set);
+        state.tgDirty = false;
+        state.tokenSaved = c.token_set;
+        maskSecret("token", c.token_set);
+        $("boardsBtn").disabled = !state.owner;
+        onTokenInput();
+    }
+
+    function markTgDirty() {
+        state.tgDirty = true;
+    }
+
+    function markDepDirty() {
+        state.depDirty = true;
+    }
+
+    function toggleDepAuth() {
+        const pass = $("depAuth").value === "password";
+        $("depPassField").classList.toggle("hide", !pass);
+        $("depKeyField").classList.toggle("hide", pass);
+    }
+
+    async function testDeploy() {
+        const btn = $("depBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin"></span>';
+        try {
+            const r = await api("/api/deploy/test", {
+                method: "POST", body: JSON.stringify({
+                    deploy_host: $("depHost").value, deploy_user: $("depUser").value,
+                    deploy_auth_method: $("depAuth").value, deploy_ssh_key_path: $("depKey").value,
+                    deploy_domain: $("depDomain").value, deploy_ssh_password: secretValue("depPass")
+                })
+            });
+            state.depDirty = false;
+            const saved = " (saved)";
+            setMsg("depMsg", r.detail + (!r.ok && r.fix ? " — " + r.fix : "") + saved, r.ok ? "ok" : "bad");
+        } catch (e) {
+            setMsg("depMsg", e.message, "bad");
+        }
+        btn.disabled = false;
+        btn.innerHTML = "<span>Test connection</span>";
+    }
+
+    async function testTelegram() {
+        const btn = $("tgBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin"></span>';
+        try {
+            const r = await api("/api/telegram/test", {
+                method: "POST", body: JSON.stringify({
+                    telegram_bot_token: secretValue("tgToken"),
+                    telegram_chat_id: $("tgChat").value, telegram_username: $("tgUser").value
+                })
+            });
+            if (r.chat_id) $("tgChat").value = r.chat_id;   // reflect resolved id so Save won't clear it
+            state.tgDirty = false;
+            setMsg("tgMsg", r.detail + (!r.ok && r.fix ? " — " + r.fix : "") + " (saved)", r.ok ? "ok" : "bad");
+        } catch (e) {
+            setMsg("tgMsg", e.message, "bad");
+        }
+        btn.disabled = false;
+        btn.innerHTML = "<span>Send test message</span>";
+    }
+
+    async function refreshChecks() {
+        const checks = await api("/api/doctor");
+        const required = checks.filter(c => !c.optional);
+        const okReq = required.filter(c => c.ok).length;
+        const pct = Math.round(okReq / required.length * 100);
+        $("ring").style.setProperty("--p", pct);
+        $("ringPct").textContent = pct + "%";
+        const allReq = okReq === required.length;
+        $("readyTitle").textContent = allReq ? "Ready to run" : `${required.length - okReq} thing(s) to fix`;
+        $("readySub").textContent = allReq ? "All required checks pass." : "Failing items are listed below with a fix.";
+        $("checks").innerHTML = checks.map(c => {
+            const cls = c.ok ? "ok" : (c.optional ? "opt" : "bad");
+            const ic = c.ok ? ICON.check : (c.optional ? ICON.warn : ICON.x);
+            return `<div class="check"><span class="badge ${cls}">${ic}</span><span class="nm">${c.name}</span><span class="dt">${c.ok ? c.detail : (c.fix || c.detail)}</span></div>`;
+        }).join("");
+    }
+
+    async function testToken() {
+        const token = secretValue("token");
+        if (!token && !state.tokenSaved) {
+            setMsg("tokenMsg", "Paste a token first.", "bad");
+            return;
+        }
+        const btn = $("tokenBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin"></span>';
+        try {
+            const r = await api("/api/token/test", {
+                method: "POST",
+                body: JSON.stringify({token: token, owner: state.owner})
+            });
+            state.tokenOk = r.ok;
+            $("token").classList.toggle("ok", r.ok);
+            $("token").classList.toggle("bad", !r.ok);
+            setMsg("tokenMsg", r.detail + (r.ok ? "" : ""), r.ok ? "ok" : "bad");
+            if (!r.ok && r.fix) setMsg("tokenMsg", r.detail + " — " + r.fix, "bad");
+            if (r.ok && r.login && !$("owner").value) {
+                $("owner").value = r.login;
+                onOwnerInput();
+            }
+        } catch (e) {
+            setMsg("tokenMsg", e.message, "bad");
+            state.tokenOk = false;
+        }
+        btn.disabled = false;
+        btn.innerHTML = "<span>Test</span>";
+        validate();
+    }
+
+    async function loadBoards() {
+        const token = secretValue("token");
+        await api("/api/config", {method: "POST", body: JSON.stringify({token: token, owner: state.owner})});
+        state.tokenSaved = state.tokenSaved || !!token;
+        const btn = $("boardsBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin"></span>';
+        try {
+            const boards = await api("/api/boards");
+            state.boards = boards;
+            const sel = $("board");
+            if (!boards.length) {
+                sel.innerHTML = "<option value=''>— none found —</option>";
+                sel.disabled = true;
+                setMsg("boardMsg", "No boards found. The token likely lacks the 'project' scope — regenerate it with 'project' ticked.", "bad");
+            } else {
+                sel.disabled = false;
+                sel.innerHTML = boards.map(b => `<option value="${b.number}" data-t="${b.title}">#${b.number}  ${b.title}</option>`).join("");
+                setMsg("boardMsg", `Found ${boards.length} board(s) — pick one.`, "ok");
+            }
+        } catch (e) {
+            setMsg("boardMsg", e.message, "bad");
+        }
+        btn.disabled = !state.owner;
+        btn.innerHTML = "<span>Load boards</span>";
+        validate();
+    }
+
+    async function saveConfig() {
+        const sel = $("board");
+        const opt = sel.options[sel.selectedIndex];
+        const patch = {
+            token: secretValue("token"), owner: state.owner,
+            default_template: $("template").value, default_agent: $("defaultAgent").value,
+            max_parallel: parseInt($("maxParallel").value) || 2,
+            deploy_host: $("depHost").value.trim(), deploy_user: $("depUser").value.trim(),
+            deploy_auth_method: $("depAuth").value, deploy_ssh_key_path: $("depKey").value.trim(),
+            deploy_domain: $("depDomain").value.trim(),
+            telegram_chat_id: $("tgChat").value.trim(), telegram_username: $("tgUser").value.trim()
+        };
+        const botToken = secretValue("tgToken");
+        if (botToken) patch.telegram_bot_token = botToken;
+        const sshPass = secretValue("depPass");
+        if (sshPass) patch.deploy_ssh_password = sshPass;
+        if (sel.value) {
+            patch.project_number = parseInt(sel.value);
+            patch.project_title = opt ? opt.dataset.t : "";
+        }
+        const btn = $("saveBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin"></span>';
+        try {
+            await api("/api/config", {method: "POST", body: JSON.stringify(patch)});
+            toast("Configuration saved", "ok");
+            setMsg("saveMsg", "Saved.", "ok");
+            btn.innerHTML = "<span>Save configuration</span>";
+            btn.disabled = false;
+            validate();
+            loadConfig();
+            refreshChecks();  // refresh in the background — don't block the button
+        } catch (e) {
+            toast(e.message, "bad");
+            setMsg("saveMsg", e.message, "bad");
+            btn.innerHTML = "<span>Save configuration</span>";
+            btn.disabled = false;
+            validate();
+        }
+    }
+
+    const BOARD_COLS = ["Todo", "In Progress", "In Review", "Needs Info", "Done"];
+
+    async function refreshRuns() {
+        try {
+            const d = await api("/api/runs");
+            const all = Object.values(d.runs).flat();
+            $("stActive").textContent = d.active;
+            $("stWaiting").textContent = d.waiting;
+            $("stShipped").textContent = (d.runs.succeeded || []).length;
+            $("stCost").textContent = "$" + all.reduce((s, r) => s + (r.cost_usd || 0), 0).toFixed(2);
+        } catch (e) {
+        }
+        try {
+            const b = await api("/api/board");
+            const warn = $("boardWarn");
+            if (!b.connected) {
+                $("cols").innerHTML = `<div class="col"><div class="empty">${b.error ? "Board error: " + b.error : "No board connected — finish Setup."}</div></div>`;
+                warn.classList.add("hide");
+                return;
+            }
+            $("dbBoard").textContent = "board · " + (b.title || "");
+            if (b.warnings && b.warnings.length) {
+                warn.classList.remove("hide");
+                warn.innerHTML = b.warnings.map(w => `<div class="check"><span class="badge opt">${ICON.warn}</span><span>${w}</span></div>`).join("");
+            } else warn.classList.add("hide");
+            $("cols").innerHTML = BOARD_COLS.map(col => {
+                const tasks = b.columns[col] || [];
+                const body = tasks.length ? tasks.map(t => `<div class="run"><div class="t">#${t.issue_number} ${escapeHtml(t.title).slice(0, 48)}</div>
+        <div class="m"><span class="chip">${t.repository.split("/")[1] || t.repository}</span><span class="chip">${t.agent}</span>${t.run_status ? `<span class="chip">${t.run_status}</span>` : ""}${t.phase ? `<span class="chip">${t.phase}</span>` : ""}${t.attempt ? `<span class="chip">attempt ${t.attempt}</span>` : ""}${t.cost_usd ? `<span class="chip">$${t.cost_usd.toFixed(2)}</span>` : ""}${t.pull_request_number ? `<span class="chip">PR #${t.pull_request_number}</span>` : ""}</div>
+        ${t.error ? `<div class="errline">${escapeHtml(t.error).slice(0, 120)}</div>` : ""}</div>`).join("") : `<div class="empty">empty</div>`;
+                return `<div class="col"><h3>${col}<span class="c">${tasks.length}</span></h3>${body}</div>`;
+            }).join("");
+        } catch (e) {
+        }
+    }
+
+    function escapeHtml(s) {
+        const d = document.createElement("div");
+        d.textContent = s || "";
+        return d.innerHTML;
+    }
+
+    async function refreshQuestions() {
+        try {
+            const qs = await api("/api/questions");
+            const c = $("qCount");
+            c.textContent = qs.length;
+            c.classList.toggle("hide", !qs.length);
+            $("qList").innerHTML = qs.length ? qs.map(q => `<div class="q"><div class="h"><span class="tag">needs input</span> #${q.issue_number} ${q.repository}</div>
+      <ol>${(q.questions || []).map(x => `<li>${x}</li>`).join("") || "<li>The agent is waiting for input.</li>"}</ol>
+      <textarea id="a-${q.id}" placeholder="Type your answer…"></textarea>
+      <div style="margin-top:11px"><button class="btn" onclick="postAnswer('${q.id}')"><span>Post answer & resume</span></button></div></div>`).join("")
+                : `<div class="card"><div class="empty">Nothing is waiting on you right now.</div></div>`;
+        } catch (e) {
+        }
+    }
+
+    async function postAnswer(id) {
+        const v = $("a-" + id).value.trim();
+        if (!v) {
+            toast("Write an answer first", "bad");
+            return;
+        }
+        try {
+            await api(`/api/questions/${id}/answer`, {method: "POST", body: JSON.stringify({answer: v})});
+            toast("Answer posted — agent resumes next poll", "ok");
+            refreshQuestions();
+        } catch (e) {
+            toast(e.message, "bad");
+        }
+    }
+
+    async function refreshLoop() {
+        try {
+            const l = await api("/api/loop");
+            const running = l.running;
+            $("loopDot").className = "dot" + (running ? " on" : (l.error ? " err" : ""));
+            $("loopLabel").textContent = running ? "loop running" : (l.error ? "loop error" : "loop paused");
+            const b = $("loopBtn");
+            b.className = "btn sm" + (running ? " stop" : "");
+            b.querySelector("span").textContent = running ? "Stop loop" : "Start loop";
+            b.title = l.blocking && l.blocking.length ? "Not ready: " + l.blocking.join(", ") : "";
+            if (l.last_event && l.last_event.kind) $("dbEvent").textContent = l.last_event.kind + (l.last_event.error ? ": " + l.last_event.error : "");
+            const errBox = $("loopErr");
+            if (l.error) {
+                errBox.classList.remove("hide");
+                errBox.innerHTML = `<div class="check"><span class="badge bad">${ICON.x}</span><span><b>Loop error:</b> ${escapeHtml(l.error)}</span></div>`;
+            } else errBox.classList.add("hide");
+        } catch (e) {
+        }
+    }
+
+    async function toggleLoop() {
+        const running = $("loopBtn").querySelector("span").textContent.includes("Stop");
+        try {
+            await api(running ? "/api/loop/stop" : "/api/loop/start", {method: "POST"});
+            toast(running ? "Loop paused" : "Loop started", "ok");
+            refreshLoop();
+        } catch (e) {
+            toast(e.message, "bad");
+        }
+    }
+
+    function tick() {
+        refreshLoop();
+        const v = document.querySelector(".navlink.active").dataset.view;
+        if (v === "dashboard") refreshRuns();
+        if (v === "questions") refreshQuestions();
+        if (v === "setup") refreshChecks();
+    }
+
+    loadConfig();
+    refreshChecks();
+    refreshLoop();
+    setInterval(tick, 3500);
+</script>
+</body>
+</html>

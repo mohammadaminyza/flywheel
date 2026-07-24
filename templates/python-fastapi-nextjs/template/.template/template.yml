@@ -1,0 +1,39 @@
+id: python-fastapi-nextjs
+name: FastAPI + Next.js
+stack:
+  backend: fastapi
+  frontend: nextjs
+commands:
+  install:
+    backend: uv sync --all-extras
+    frontend: npm ci
+  lint:
+    backend: uv run ruff check .
+    frontend: npm run lint
+  typecheck:
+    backend: uv run mypy app
+    frontend: npx tsc --noEmit
+  test_unit:
+    backend: uv run pytest tests/unit -q
+    frontend: npm test --if-present
+  test_integration:
+    backend: uv run pytest tests/integration -q
+  test_architecture:
+    backend: uv run pytest ../.template/architecture-tests -q
+  build:
+    backend: docker build ./backend
+    frontend: npm run build
+ports:
+  backend: 80
+  frontend: 3000
+health: /api/v1/health
+envs:
+  dev:
+    backend: 8120
+    frontend: 3120
+  stage:
+    backend: 8110
+    frontend: 3110
+  prod:
+    backend: 8100
+    frontend: 3100

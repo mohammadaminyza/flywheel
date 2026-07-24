@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-rc.*'
+      - 'v*-stage'
+      - 'v*-prod'
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.pick.outputs.environment }}
+      version: ${{ steps.pick.outputs.version }}
+      api_port: ${{ steps.pick.outputs.api_port }}
+      web_port: ${{ steps.pick.outputs.web_port }}
+      hostname: ${{ steps.pick.outputs.hostname }}
+    steps:
+      - id: pick
+        name: Resolve target environment from the tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          case "$tag" in
+            *-prod)       env=prod;  api=8100; web=3100; host="${{ vars.DOMAIN }}" ;;
+            *-stage)      env=stage; api=8110; web=3110; host="stage.${{ vars.DOMAIN }}" ;;
+            *-rc.*)       env=stage; api=8110; web=3110; host="stage.${{ vars.DOMAIN }}" ;;
+            *)            env=prod;  api=8100; web=3100; host="${{ vars.DOMAIN }}" ;;
+          esac
+          version="${tag%%-stage}"; version="${version%%-prod}"
+          echo "environment=$env"  >> "$GITHUB_OUTPUT"
+          echo "version=$version"  >> "$GITHUB_OUTPUT"
+          echo "api_port=$api"     >> "$GITHUB_OUTPUT"
+          echo "web_port=$web"     >> "$GITHUB_OUTPUT"
+          echo "hostname=$host"    >> "$GITHUB_OUTPUT"
+          echo "Tag $tag -> $env at $host"
+
+  build:
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/api:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/${{ github.repository }}/api:${{ needs.resolve.outputs.environment }}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=https://api.${{ needs.resolve.outputs.hostname }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/web:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/${{ github.repository }}/web:${{ needs.resolve.outputs.environment }}
+
+  deploy:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.resolve.outputs.environment }}
+      url: https://${{ needs.resolve.outputs.hostname }}
+    steps:
+      - name: Deploy to the Docker host
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          password: ${{ secrets.DEPLOY_SSH_PASSWORD }}
+          script: |
+            set -e
+            export STACK=${{ needs.resolve.outputs.environment }}
+            export IMAGE_TAG=${{ github.ref_name }}
+            export ENVIRONMENT=${{ needs.resolve.outputs.environment }}
+            export SUBDOMAIN=${{ needs.resolve.outputs.hostname }}
+            export API_PORT=${{ needs.resolve.outputs.api_port }}
+            export WEB_PORT=${{ needs.resolve.outputs.web_port }}
+            mkdir -p ~/stacks/$STACK
+            cd ~/stacks/$STACK
+            curl -fsSL -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -o docker-compose.deploy.yml \
+              https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/docker-compose.deploy.yml
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+            docker compose -p $STACK -f docker-compose.deploy.yml pull
+            docker compose -p $STACK -f docker-compose.deploy.yml up -d --remove-orphans
+
+      - name: Smoke test
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 10 "https://${{ needs.resolve.outputs.hostname }}" > /dev/null; then
+              echo "deployment is live"; exit 0
+            fi
+            sleep 10
+          done
+          echo "deployment did not answer"; exit 1

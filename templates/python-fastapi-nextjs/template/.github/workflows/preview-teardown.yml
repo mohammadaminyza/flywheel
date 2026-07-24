@@ -1,0 +1,26 @@
+name: Tear down preview
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  teardown:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove the preview stack
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          password: ${{ secrets.DEPLOY_SSH_PASSWORD }}
+          script: |
+            set -e
+            STACK=pr-${{ github.event.pull_request.number }}
+            if [ -d ~/stacks/$STACK ]; then
+              cd ~/stacks/$STACK
+              docker compose -p $STACK -f docker-compose.deploy.yml down --volumes --remove-orphans || true
+              cd ~ && rm -rf ~/stacks/$STACK
+            fi
+            docker image prune -f

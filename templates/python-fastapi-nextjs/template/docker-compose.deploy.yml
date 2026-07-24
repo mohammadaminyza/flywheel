@@ -1,0 +1,51 @@
+services:
+  backend:
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY}/api:${IMAGE_TAG}
+    restart: always
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-dev}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${STACK}-api.rule=Host(`api.${SUBDOMAIN}.${DOMAIN}`)"
+      - "traefik.http.routers.${STACK}-api.tls=true"
+      - "traefik.http.routers.${STACK}-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.${STACK}-api.loadbalancer.server.port=80"
+    networks:
+      - edge
+      - internal
+
+  frontend:
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY}/web:${IMAGE_TAG}
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${STACK}-web.rule=Host(`${SUBDOMAIN}.${DOMAIN}`)"
+      - "traefik.http.routers.${STACK}-web.tls=true"
+      - "traefik.http.routers.${STACK}-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.${STACK}-web.loadbalancer.server.port=3000"
+    networks:
+      - edge
+      - internal
+
+networks:
+  edge:
+    external: true
+    name: traefik-edge
+  internal:
+    driver: bridge
