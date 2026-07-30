@@ -12,6 +12,8 @@ from flywheel.agents.execution import ExecutionEnvironment
 from flywheel.domain.enums import AgentKind, Transport
 from flywheel.domain.run import RunOutcome, RunSpec
 
+RESEARCH_CONFIG = "tools.web_search=true"
+
 
 class CodexRunner:
     kind = AgentKind.CODEX
@@ -21,14 +23,21 @@ class CodexRunner:
         environment: ExecutionEnvironment,
         executable: str = "codex",
         model: str = "",
+        config_overrides: list[str] | None = None,
     ) -> None:
         self._environment = environment
         self._executable = executable
         self._model = model
+        self._config_overrides = list(config_overrides or [])
+
+    def _overrides(self) -> list[str]:
+        arguments: list[str] = []
+        for override in self._config_overrides:
+            arguments += ["-c", override]
+        return arguments
 
     def build_command(self, spec: RunSpec) -> list[str]:
         environment = self._environment
-        config = environment.run_path("codex/config.toml")
         command = [
             self._executable,
             "exec",
@@ -36,8 +45,7 @@ class CodexRunner:
             "--sandbox",
             "danger-full-access",
             "--skip-git-repo-check",
-            "-c",
-            f"config_file={config}",
+            *self._overrides(),
             "-o",
             environment.run_path("result.txt"),
         ]
@@ -48,14 +56,19 @@ class CodexRunner:
                 self._executable,
                 "exec",
                 "resume",
-                spec.resume_session_id,
                 "--json",
-                "--sandbox",
-                "danger-full-access",
+                "--dangerously-bypass-approvals-and-sandbox",
                 "--skip-git-repo-check",
+                *self._overrides(),
                 "-o",
                 environment.run_path("result.txt"),
             ]
+            if self._model:
+                command += ["--model", self._model]
+            command.append(spec.resume_session_id)
+        if spec.research:
+            # Codex only reaches the open web when its web-search tool is switched on.
+            command += ["-c", RESEARCH_CONFIG]
         command.append("-")
         return environment.wrap(command)
 

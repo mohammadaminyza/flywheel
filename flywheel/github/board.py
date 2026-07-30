@@ -74,6 +74,31 @@ mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
 }
 """
 
+ADD_PROJECT_ITEM = """
+mutation($project: ID!, $content: ID!) {
+  addProjectV2ItemById(input: {projectId: $project, contentId: $content}) {
+    item { id }
+  }
+}
+"""
+
+SET_TEXT_FIELD = """
+mutation($project: ID!, $item: ID!, $field: ID!, $value: String!) {
+  updateProjectV2ItemFieldValue(
+    input: {projectId: $project, itemId: $item, fieldId: $field,
+            value: {text: $value}}
+  ) { projectV2Item { id } }
+}
+"""
+
+CREATE_TEXT_FIELD = """
+mutation($project: ID!, $name: String!) {
+  createProjectV2Field(input: {projectId: $project, dataType: TEXT, name: $name}) {
+    projectV2Field { ... on ProjectV2Field { id name } }
+  }
+}
+"""
+
 
 class BoardField(BaseModel):
     id: str
@@ -181,6 +206,7 @@ class BoardService:
             agent=agent,
             status=status,
             template_id=values.get(self._settings.template_field) or None,
+            branch=values.get(self._settings.branch_field) or None,
             labels=[label["name"] for label in content["labels"]["nodes"]],
             assignees=[user["login"] for user in content["assignees"]["nodes"]],
             updated_at=datetime.fromisoformat(content["updatedAt"].replace("Z", "+00:00")),
@@ -202,6 +228,25 @@ class BoardService:
                 return collected
             cursor = page["endCursor"]
 
+    def repositories(self) -> list[Repository]:
+        """Return the repositories represented by issues on the connected Project."""
+        collected: dict[str, Repository] = {}
+        cursor: str | None = None
+        while True:
+            payload = self._project_payload(cursor)
+            for item in payload["items"]["nodes"]:
+                content = item.get("content") or {}
+                repository = content.get("repository") or {}
+                owner = (repository.get("owner") or {}).get("login")
+                name = repository.get("name")
+                if owner and name:
+                    value = Repository(owner=owner, name=name)
+                    collected[value.full_name.casefold()] = value
+            page = payload["items"]["pageInfo"]
+            if not page["hasNextPage"]:
+                return sorted(collected.values(), key=lambda value: value.full_name.casefold())
+            cursor = page["endCursor"]
+
     def claimable(self) -> list[Task]:
         return [task for task in self.tasks() if task.status == TaskStatus.TODO]
 
@@ -216,6 +261,9 @@ class BoardService:
         return None
 
     def set_status(self, task: Task, status: TaskStatus) -> None:
+        self.set_item_status(task.project_item_id, status)
+
+    def set_item_status(self, item_id: str, status: TaskStatus) -> None:
         board = self.board
         field = board.fields.get(self._settings.status_field)
         if field is None:
@@ -229,7 +277,7 @@ class BoardService:
             SET_SELECT_FIELD,
             {
                 "project": board.id,
-                "item": task.project_item_id,
+                "item": item_id,
                 "field": field.id,
                 "option": option_id,
             },
@@ -240,3 +288,35 @@ class BoardService:
         if field is None:
             return [status.value for status in TaskStatus]
         return [status.value for status in TaskStatus if status.value not in field.options]
+
+    def add_issue(self, issue_node_id: str, branch: str = "") -> str:
+        payload = self._client.graphql(
+            ADD_PROJECT_ITEM,
+            {"project": self.board.id, "content": issue_node_id},
+        )
+        item_id = str(payload["addProjectV2ItemById"]["item"]["id"])
+        if branch.strip():
+            self.set_text(item_id, self._settings.branch_field, branch.strip(), create=True)
+        return item_id
+
+    def set_text(self, item_id: str, field_name: str, value: str, create: bool = False) -> None:
+        field = self.board.fields.get(field_name)
+        if field is None and create:
+            payload = self._client.graphql(
+                CREATE_TEXT_FIELD,
+                {"project": self.board.id, "name": field_name},
+            )
+            created = payload["createProjectV2Field"]["projectV2Field"]
+            field = BoardField(id=created["id"], name=created["name"])
+            self.board.fields[field_name] = field
+        if field is None:
+            raise ValidationException(f"board has no '{field_name}' field to update")
+        self._client.graphql(
+            SET_TEXT_FIELD,
+            {
+                "project": self.board.id,
+                "item": item_id,
+                "field": field.id,
+                "value": value,
+            },
+        )

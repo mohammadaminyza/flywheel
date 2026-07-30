@@ -5,11 +5,13 @@ from pydantic import BaseModel, ConfigDict
 
 from flywheel.config import Settings
 from flywheel.delivery.telegram import TelegramNotifier
+from flywheel.github.actions import ActionsService
 from flywheel.github.board import BoardService
 from flywheel.github.client import GitHubClient
 from flywheel.github.issues import IssueService
 from flywheel.github.pulls import PullRequestService
 from flywheel.services.clarification_service import ClarificationService
+from flywheel.services.delivery_service import DeliveryService
 from flywheel.services.dispatcher import Dispatcher
 from flywheel.services.exceptions import BoardNotConfiguredException
 from flywheel.services.project_service import ProjectService
@@ -32,6 +34,7 @@ class Container(BaseModel):
     pulls: PullRequestService
     projects: ProjectService
     dispatcher: Dispatcher
+    delivery: DeliveryService
 
     def close(self) -> None:
         self.client.close()
@@ -52,8 +55,10 @@ def build(settings: Settings, on_event: EventSink | None = None) -> Container:
     clarification = ClarificationService(
         issues, board, timeout_hours=settings.loop.question_timeout_hours
     )
-    scaffold = ScaffoldService(settings.templates_path)
-    reporter = TaskReporter(issues, TelegramNotifier(settings.telegram))
+    scaffold = ScaffoldService(settings.template_roots)
+    telegram = TelegramNotifier(settings.telegram)
+    reporter = TaskReporter(issues, telegram)
+    actions = ActionsService(client)
     dispatcher = Dispatcher(
         settings=settings,
         ledger=ledger,
@@ -64,8 +69,17 @@ def build(settings: Settings, on_event: EventSink | None = None) -> Container:
         workspaces=workspaces,
         clarification=clarification,
         scaffold=scaffold,
+        actions=actions,
         reporter=reporter,
         on_event=on_event,
+    )
+    delivery = DeliveryService(
+        actions,
+        pulls,
+        board,
+        telegram,
+        ledger,
+        settings.database_path.parent / "artifacts",
     )
     return Container(
         settings=settings,
@@ -76,4 +90,5 @@ def build(settings: Settings, on_event: EventSink | None = None) -> Container:
         pulls=pulls,
         projects=projects,
         dispatcher=dispatcher,
+        delivery=delivery,
     )

@@ -9,8 +9,7 @@ ARCH_TESTS = (
     Path(__file__).resolve().parents[1]
     / "templates"
     / "python-fastapi-nextjs"
-    / "template"
-    / ".template"
+    / "guidance"
     / "architecture-tests"
 )
 

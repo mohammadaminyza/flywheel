@@ -37,6 +37,7 @@ class Task(BaseModel):
     agent: AgentKind
     status: TaskStatus
     template_id: str | None = None
+    branch: str | None = None
     labels: list[str] = Field(default_factory=list)
     assignees: list[str] = Field(default_factory=list)
     updated_at: datetime | None = None
@@ -58,6 +59,16 @@ class Task(BaseModel):
 
     @property
     def branch_name(self) -> str:
+        if self.branch:
+            normalized = "".join(
+                character
+                if character.isascii() and (character.isalnum() or character in "._/-")
+                else "-"
+                for character in self.branch.strip()
+            )
+            normalized = "/".join(part.strip(".-") for part in normalized.split("/") if part)
+            if normalized:
+                return normalized[:120]
         if self.slug:
             return f"{self.branch_prefix}/{self.issue_number}-{self.slug}"
         return f"{self.branch_prefix}/issue-{self.issue_number}"

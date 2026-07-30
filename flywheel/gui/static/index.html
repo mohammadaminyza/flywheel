@@ -667,6 +667,104 @@
             box-shadow: 0 0 0 3px rgba(99, 102, 241, .18);
         }
 
+        .connection-intro {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding: 16px 18px;
+            border-color: rgba(99, 102, 241, .35);
+        }
+
+        .connection-intro div {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            color: var(--muted);
+            font-size: 12.5px;
+        }
+
+        .connection-intro svg {
+            color: var(--accent-hover);
+            width: 16px;
+            margin-top: 2px;
+        }
+
+        .mcp-card {
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .mcp-card-head {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, .015);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .mcp-card-head h2 {
+            margin: 0;
+            font-size: 15px;
+        }
+
+        .mcp-card-head small {
+            color: var(--muted);
+        }
+
+        .mcp-card-body {
+            padding: 18px 20px 4px;
+        }
+
+        .mcp-card-actions {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .checkline {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            margin: 0;
+            color: var(--text);
+        }
+
+        .checkline input {
+            width: auto;
+            accent-color: var(--accent);
+        }
+
+        .mcp-advanced {
+            border-top: 1px solid var(--border);
+            margin: 4px -20px 0;
+            padding: 0 20px;
+        }
+
+        .mcp-advanced summary {
+            color: var(--muted);
+            cursor: pointer;
+            padding: 14px 0;
+            font-size: 13px;
+            user-select: none;
+        }
+
+        .mcp-advanced textarea {
+            min-height: 68px;
+        }
+
+        .connection-footer {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding-top: 2px;
+        }
+
+        .connection-footer .msg {
+            flex: 1;
+        }
+
         .spin {
             width: 15px;
             height: 15px;
@@ -734,6 +832,23 @@
             .checks {
                 grid-template-columns: 1fr;
             }
+
+            .row, .connection-intro {
+                display: block;
+            }
+
+            .connection-intro div + div {
+                margin-top: 12px;
+            }
+
+            .mcp-card-head {
+                align-items: flex-start;
+            }
+
+            .mcp-card-actions {
+                flex-wrap: wrap;
+                justify-content: flex-end;
+            }
         }
     </style>
 </head>
@@ -764,11 +879,36 @@
         </svg>
         Dashboard
     </div>
+    <div class="navlink" data-view="loop" onclick="show('loop')">
+        <svg viewBox="0 0 24 24">
+            <path d="M21 2v6h-6M3 22v-6h6"/>
+            <path d="M20.5 9a8.5 8.5 0 00-14.6-3.1L3 8M3.5 15a8.5 8.5 0 0014.6 3.1L21 16"/>
+        </svg>
+        Loop
+    </div>
+    <div class="navlink" data-view="activity" onclick="show('activity')">
+        <svg viewBox="0 0 24 24">
+            <path d="M3 12h4l2-7 4 14 2-7h6"/>
+        </svg>
+        Activity
+    </div>
     <div class="navlink" data-view="questions" onclick="show('questions')">
         <svg viewBox="0 0 24 24">
             <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
         </svg>
         Questions <span class="count hide" id="qCount">0</span></div>
+    <div class="navlink" data-view="project" onclick="show('project')">
+        <svg viewBox="0 0 24 24">
+            <path d="M3 3h18v18H3zM7 8h10M7 12h10M7 16h6"/>
+        </svg>
+        Project brief
+    </div>
+    <div class="navlink" data-view="connections" onclick="show('connections')">
+        <svg viewBox="0 0 24 24">
+            <path d="M8 12h8M5 8a4 4 0 100 8M19 8a4 4 0 110 8"/>
+        </svg>
+        Connections
+    </div>
     <div class="sidefoot">
         <div class="looprow"><span class="dot" id="loopDot"></span><span id="loopLabel">loop paused</span></div>
         <button class="btn sm" id="loopBtn" style="width:100%; justify-content:center" onclick="toggleLoop()">
@@ -841,14 +981,41 @@
                         <option value="claude-code">Claude Code</option>
                         <option value="codex">Codex</option>
                     </select></div>
-                <div class="field"><label>Default template (empty repos)</label><select id="template"></select></div>
                 <div class="field"><label>Tasks at once</label><input id="maxParallel" type="number" min="1" value="2"/>
                 </div>
+            </div>
+            <div class="field" style="margin-top:14px">
+                <label>Base branch</label>
+                <input id="baseBranch" placeholder="main — leave blank to use each repository's own default"/>
+                <div class="msg muted"><span>Every feature branch is cut from this branch's latest commit, and every pull request goes back into it. A repository that does not have it falls back to its own default, so <code>master</code> and <code>dev</code> repositories keep working.</span></div>
             </div>
         </div>
 
         <div class="card">
-            <h2><span class="num">4</span> Docker host &amp; preview environments <span
+            <h2><span class="num">4</span> Templates</h2>
+            <p class="sub">Used only when a repository has no code yet. A repository that already has code is
+                never scaffolded — its own structure is followed instead.</p>
+            <div class="field">
+                <label>Where your templates live <span
+                        style="color:var(--faint);font-weight:400;font-size:12px">optional</span></label>
+                <input id="templatesDir" onchange="previewTemplates()"
+                       placeholder="D:\templates — a folder of templates, or one template folder. Blank uses the ones shipped with Flywheel"/>
+                <div class="msg muted" id="templatesMsg"></div>
+            </div>
+            <div class="field" style="margin-top:14px">
+                <label>Template committed into a repository with no code</label>
+                <select id="template" onchange="showTemplateSource()"></select>
+                <div class="msg muted" id="templateSource"></div>
+            </div>
+            <p class="sub" style="margin:0">One template is one folder: <code>template.yml</code> describing it, a
+                <code>template/</code> folder with the files that get committed, and an optional
+                <code>guidance/</code> folder with the rules, samples and architecture tests the agents read —
+                staged into the working copy, never committed. Your folder wins when an id matches a bundled one.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2><span class="num">5</span> Docker host &amp; preview environments <span
                     style="color:var(--faint);font-weight:400;font-size:12px">optional</span></h2>
             <p class="sub">A Docker host reached over SSH gives every pull request a live URL and screenshots. Leave
                 blank to skip previews.</p>
@@ -881,7 +1048,7 @@
         </div>
 
         <div class="card">
-            <h2><span class="num">5</span> Notifications <span
+            <h2><span class="num">6</span> Notifications <span
                     style="color:var(--faint);font-weight:400;font-size:12px">optional</span></h2>
             <p class="sub">Get the preview link and screenshots on Telegram when a PR is ready. Paste your bot token,
                 then <b>message your bot once</b> (press Start) and enter your @username — Flywheel finds your chat id
@@ -929,6 +1096,71 @@
         <div class="cols" id="cols"></div>
     </section>
 
+    <!-- LOOP -->
+    <section id="loop" class="hide">
+        <div class="head">
+            <div><h1>Loop</h1>
+                <p>The factory polls the board, claims Todo cards and runs them. Everything it does shows up here.</p>
+            </div>
+            <div class="spacer"></div>
+            <button class="btn ghost sm" id="loopPokeBtn" onclick="pokeLoop()"><span>Run a cycle now</span></button>
+            <button class="btn" id="loopMainBtn" onclick="toggleLoop()"><span>Start loop</span></button>
+        </div>
+
+        <div class="card">
+            <div class="ready">
+                <div class="ring" id="loopRing"><b id="loopRingLabel">off</b></div>
+                <div class="lbl"><b id="loopState">Loop paused</b>
+                    <div id="loopDetail">Start it once Setup is green — it keeps running while this app is open.</div>
+                </div>
+            </div>
+            <div class="stats" style="margin-top:18px">
+                <div class="stat"><b id="loopTicks">0</b><span>cycles polled</span></div>
+                <div class="stat"><b id="loopLast">never</b><span>last cycle</span></div>
+                <div class="stat"><b id="loopInterval">60s</b><span>poll interval</span></div>
+                <div class="stat"><b id="loopParallel">2</b><span>tasks at once</span></div>
+            </div>
+        </div>
+
+        <div id="loopBlocking" class="card hide"
+             style="border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.05)"></div>
+        <div id="loopError" class="card hide"
+             style="border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.06)"></div>
+
+        <div class="card">
+            <h2>Loop settings</h2>
+            <p class="sub">Saved immediately. A running loop picks them up on its next cycle.</p>
+            <div class="row">
+                <div class="field"><label>Poll interval (seconds)</label><input id="loopPoll" type="number" min="5"
+                                                                                value="60"/></div>
+                <div class="field"><label>Attempts per card</label><input id="loopAttempts" type="number" min="1"
+                                                                          value="3"/></div>
+                <div class="field"><label>Tasks at once</label><input id="loopParallelInput" type="number" min="1"
+                                                                      value="2"/></div>
+            </div>
+            <div class="inline" style="margin-top:12px">
+                <button class="btn ghost sm" id="loopSaveBtn" onclick="saveLoopSettings()"><span>Save loop settings</span>
+                </button>
+                <div class="msg muted" id="loopSaveMsg" style="flex:1"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Live loop feed</h2>
+            <p class="sub">The last cycles, agent events and errors, newest first.</p>
+            <div class="checks" id="loopFeed"></div>
+        </div>
+    </section>
+
+    <!-- ACTIVITY -->
+    <section id="activity" class="hide">
+        <div class="head">
+            <div><h1>Agent activity</h1>
+                <p>Durable evidence from every background Codex or Claude session.</p></div>
+        </div>
+        <div id="activityList"></div>
+    </section>
+
     <!-- QUESTIONS -->
     <section id="questions" class="hide">
         <div class="head">
@@ -936,6 +1168,87 @@
                 <p>Answer an agent and it resumes on the next poll.</p></div>
         </div>
         <div id="qList"></div>
+    </section>
+
+    <!-- PROJECT BRIEF -->
+    <section id="project" class="hide">
+        <div class="head">
+            <div><h1>Project brief and plan</h1>
+                <p id="projectContext">Loading the connected GitHub Project…</p></div>
+        </div>
+        <div class="card">
+            <div class="field"><label>Repository from this GitHub Project</label>
+                <select id="briefRepo" disabled>
+                    <option value="">Loading repositories…</option>
+                </select>
+                <div class="msg muted" id="projectRepoMsg"></div>
+            </div>
+            <div class="field"><label>Purpose</label><textarea id="briefPurpose" placeholder="Why does this project exist?"></textarea></div>
+            <div class="field"><label>Goals</label><textarea id="briefGoals" placeholder="What outcomes should the project achieve?"></textarea></div>
+            <div class="field"><label>Client needs</label><textarea id="briefNeeds" placeholder="Who is the client and what do they need?"></textarea></div>
+            <div class="field"><label>Constraints</label><textarea id="briefConstraints" placeholder="Deadlines, compliance, platforms, budget, technical limits..."></textarea></div>
+            <div class="field"><label>Planning agents</label>
+                <div class="inline" style="gap:18px;flex-wrap:wrap">
+                    <label class="checkline"><input id="planClaude" type="checkbox" checked style="width:auto"/> Claude
+                        Code</label>
+                    <label class="checkline"><input id="planCodex" type="checkbox" checked style="width:auto"/> Codex</label>
+                    <label class="checkline"><input id="planResearch" type="checkbox" checked style="width:auto"/> Deep
+                        research (web search)</label>
+                </div>
+                <div class="msg muted"><span>Each selected agent researches the repository and the brief on its own; the plans are merged and tasks both agents proposed are listed first.</span></div>
+            </div>
+            <label style="display:flex;gap:9px;align-items:center;margin:12px 0 18px">
+                <input id="briefCreate" type="checkbox" checked style="width:auto"/>
+                Create the generated tasks on the connected GitHub project as Todo
+            </label>
+            <div class="inline">
+                <button class="btn" id="planBtn" onclick="reviewAndPlan()"><span>Review repository and create plan</span></button>
+                <div class="msg muted" id="planMsg"></div>
+            </div>
+        </div>
+        <div id="planResult"></div>
+
+        <div class="card">
+            <h2>Backlog grooming</h2>
+            <p class="sub">Every loop cycle, the factory reads the Todo cards from GitHub, and the
+                agents re-read the repository and this brief to rewrite each card with scope, acceptance
+                criteria, the tests it needs, its dependencies on the other cards and a shared
+                branch/workstream where several must ship together. The rewritten text is written back to
+                the GitHub issue, once per card, before anyone starts building it. Write issues however
+                you like — the factory sharpens them.</p>
+            <div class="row">
+                <label class="checkline"><input id="autoRefine" type="checkbox" checked style="width:auto"
+                                                onchange="saveRefineSettings()"/> Groom new cards
+                    automatically on every cycle</label>
+                <div class="field"><label>Cards per cycle</label><input id="refineBatch" type="number" min="1"
+                                                                        value="5"
+                                                                        onchange="saveRefineSettings()"/></div>
+            </div>
+            <div class="inline" style="margin-top:12px">
+                <button class="btn ghost" id="refineBtn" onclick="refineBacklog()"><span>Groom the backlog now</span></button>
+                <div class="msg muted" id="refineMsg" style="flex:1"></div>
+            </div>
+            <div id="backlogState" style="margin-top:18px"></div>
+        </div>
+    </section>
+
+    <!-- MCP CONNECTIONS -->
+    <section id="connections" class="hide">
+        <div class="head">
+            <div><h1>MCP connections</h1>
+                <p>Give every agent reusable tools for external platforms.</p></div>
+            <div class="spacer"></div>
+            <button class="btn ghost sm" onclick="addMcpConnection()"><span>Add connection</span></button>
+        </div>
+        <div class="card connection-intro">
+            <div><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg><span><b>Remote HTTP</b><br/>Connect a hosted MCP server with a URL and optional authorization headers.</span></div>
+            <div><svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg><span><b>Local command</b><br/>Start an MCP package with a command, arguments, and environment variables.</span></div>
+        </div>
+        <div id="mcpList"></div>
+        <div class="connection-footer">
+            <div class="msg muted" id="mcpMsg">Changes apply to new agent runs.</div>
+            <button class="btn" id="mcpSave" onclick="saveMcpConnections()"><span>Save connections</span></button>
+        </div>
     </section>
 </main>
 <div class="toast" id="toast"></div>
@@ -965,11 +1278,17 @@
         setTimeout(() => t.className = "toast", 2800);
     }
 
+    const VIEWS = ["setup", "dashboard", "loop", "activity", "questions", "project", "connections"];
+
     function show(view) {
-        ["setup", "dashboard", "questions"].forEach(s => $(s).classList.toggle("hide", s !== view));
+        VIEWS.forEach(s => $(s).classList.toggle("hide", s !== view));
         document.querySelectorAll(".navlink").forEach(b => b.classList.toggle("active", b.dataset.view === view));
         if (view === "dashboard") refreshRuns();
+        if (view === "loop") refreshLoop();
+        if (view === "activity") refreshActivity();
         if (view === "questions") refreshQuestions();
+        if (view === "project") { loadProjectContext(); loadBacklog(); }
+        if (view === "connections") loadMcpConnections();
     }
 
     function setMsg(id, text, kind) {
@@ -1057,14 +1376,18 @@
             state.boardVal = bsel.value;
             setMsg("boardMsg", "Showing your saved board. Click Load boards to change it.", "muted");
         }
-        const t = $("template");
-        t.innerHTML = "";
-        (c.templates || []).forEach(x => {
-            const o = document.createElement("option");
-            o.value = o.textContent = x;
-            if (x === c.default_template) o.selected = true;
-            t.appendChild(o);
-        });
+        $("baseBranch").value = c.base_branch || "";
+        $("templatesDir").value = c.templates_dir || "";
+        state.templates = c.template_catalog || (c.templates || []).map(id => ({id, name: id, custom: false}));
+        state.bundledTemplates = c.bundled_templates_dir || "";
+        renderTemplates(c.default_template);
+        $("loopPoll").value = c.poll_interval_seconds || 60;
+        $("loopAttempts").value = c.max_attempts || 3;
+        $("loopParallelInput").value = c.max_parallel || 2;
+        const planning = c.planning_agents || ["claude-code", "codex"];
+        $("planClaude").checked = planning.includes("claude-code");
+        $("planCodex").checked = planning.includes("codex");
+        $("planResearch").checked = c.planning_deep_research !== false;
         $("depHost").value = c.deploy_host || "";
         $("depUser").value = c.deploy_user || "";
         $("depKey").value = c.deploy_ssh_key_path || "";
@@ -1076,11 +1399,361 @@
         $("tgChat").value = c.telegram_chat_id || "";
         $("tgUser").value = c.telegram_username || "";
         maskSecret("tgToken", c.telegram_bot_set);
+        const brief = c.project_brief || {};
+        state.briefRepository = brief.repository || "";
+        $("briefPurpose").value = brief.purpose || "";
+        $("briefGoals").value = brief.goals || "";
+        $("briefNeeds").value = brief.client_needs || "";
+        $("briefConstraints").value = brief.constraints || "";
         state.tgDirty = false;
         state.tokenSaved = c.token_set;
         maskSecret("token", c.token_set);
         $("boardsBtn").disabled = !state.owner;
         onTokenInput();
+    }
+
+    // The folder is where templates come from; the dropdown is which one of them is used.
+    // Both always show the same list, and the selection names the folder it was read from.
+    function renderTemplates(selected) {
+        const catalog = state.templates || [];
+        const chosen = selected || $("template").value;
+        const dropdown = $("template");
+        dropdown.innerHTML = catalog.length
+            ? ""
+            : '<option value="">— no templates found —</option>';
+        catalog.forEach(entry => {
+            const option = document.createElement("option");
+            option.value = entry.id;
+            option.textContent = entry.name && entry.name !== entry.id ? `${entry.id} — ${entry.name}` : entry.id;
+            if (entry.custom) option.textContent += "  (yours)";
+            if (entry.id === chosen) option.selected = true;
+            dropdown.appendChild(option);
+        });
+        dropdown.disabled = !catalog.length;
+        const mine = catalog.filter(entry => entry.custom).length;
+        setMsg("templatesMsg", catalog.length
+            ? `${catalog.length} template(s) found${mine ? `, ${mine} in your folder` : ""}. Shipped with Flywheel: ${state.bundledTemplates || ""}`
+            : "No template.yml found there. Point this at a folder of templates, or at one template folder.",
+            catalog.length ? "muted" : "bad");
+        showTemplateSource();
+    }
+
+    function showTemplateSource() {
+        const entry = (state.templates || []).find(item => item.id === $("template").value);
+        if (!entry) {
+            setMsg("templateSource", "", "muted");
+            return;
+        }
+        setMsg("templateSource",
+            `${entry.custom ? "Yours" : "Shipped with Flywheel"} · <code>${escapeHtml(entry.path || "")}</code>${entry.has_guidance ? " · carries rules and samples for the agents" : " · no guidance folder, so only its files are used"}`,
+            "muted");
+    }
+
+    async function previewTemplates() {
+        // Show what the folder actually holds before anything is saved.
+        try {
+            const c = await api("/api/config", {
+                method: "POST",
+                body: JSON.stringify({templates_dir: $("templatesDir").value.trim()})
+            });
+            state.templates = c.template_catalog || [];
+            renderTemplates(c.default_template);
+        } catch (e) {
+            setMsg("templatesMsg", e.message, "bad");
+        }
+    }
+
+    function repositoryOptions(repositories, selected) {
+        return repositories.map(repository =>
+            `<option value="${escapeHtml(repository)}" ${repository === selected ? "selected" : ""}>${escapeHtml(repository)}</option>`
+        ).join("");
+    }
+
+    async function loadProjectContext() {
+        try {
+            let context;
+            try {
+                context = await api("/api/project/context");
+            } catch (_error) {
+                // Compatibility with a factory process that was started before this endpoint
+                // existed: the dashboard already contains the same Project repository data.
+                const board = await api("/api/board");
+                const repositories = [...new Set(Object.values(board.columns || {}).flat()
+                    .map(task => task.repository).filter(Boolean))].sort();
+                context = {
+                    connected: board.connected,
+                    title: board.title || "",
+                    repositories,
+                    error: board.error
+                };
+            }
+            if (!context.connected) {
+                $("projectContext").textContent = context.error || "No GitHub Project is connected.";
+                $("briefRepo").innerHTML = '<option value="">No repositories available</option>';
+                $("briefRepo").disabled = true;
+                setMsg("projectRepoMsg", "Connect a GitHub Project in Setup first.", "bad");
+                return;
+            }
+
+            $("projectContext").textContent = `GitHub Project · ${context.title || "#" + context.number} · ${context.owner || ""}`;
+            const repositories = context.repositories || [];
+            if (!repositories.length) {
+                $("briefRepo").innerHTML = '<option value="">No repositories found for this owner</option>';
+                $("briefRepo").disabled = true;
+                setMsg("projectRepoMsg", context.warning || `No repository is visible to the token saved in Setup for ${context.owner}. Create one on GitHub, then reload.`, "bad");
+                return;
+            }
+
+            const current = $("briefRepo").value;
+            const saved = context.selected || state.briefRepository;
+            const preferred = repositories.includes(current) ? current
+                : repositories.includes(saved) ? saved
+                : repositories[0];
+            $("briefRepo").innerHTML = repositoryOptions(repositories, preferred);
+            $("briefRepo").disabled = false;
+            const onBoard = (context.board_repositories || []).length;
+            setMsg("projectRepoMsg",
+                context.warning
+                    ? `${repositories.length} repositories from the token saved in Setup. Board lookup said: ${context.warning}`
+                    : `${repositories.length} repositories available${onBoard ? `, ${onBoard} already on the board` : " — this board has no issues yet, so every repository you own is listed"}.`,
+                context.warning ? "muted" : "ok");
+        } catch (e) {
+            setMsg("projectRepoMsg", e.message, "bad");
+        }
+    }
+
+    let mcpConnections = [];
+
+    async function loadMcpConnections() {
+        try {
+            const data = await api("/api/mcp");
+            mcpConnections = Object.entries(data.servers || {}).map(([name, spec]) => ({name, ...spec}));
+            renderMcpConnections();
+        } catch (e) {
+            setMsg("mcpMsg", e.message, "bad");
+        }
+    }
+
+    function addMcpConnection() {
+        mcpConnections.push({name: "", enabled: true, command: "", url: "", args: [], env: {}, required: false});
+        renderMcpConnections();
+    }
+
+    function renderMcpConnections() {
+        const list = $("mcpList");
+        if (!mcpConnections.length) {
+            list.innerHTML = '<div class="card"><h2>No extra connections yet</h2><p class="sub" style="margin:5px 0 0">GitHub and browser testing are already available. Add a connection only when agents need another platform.</p></div>';
+            return;
+        }
+        list.innerHTML = mcpConnections.map((item, index) => `
+          <div class="card mcp-card" data-index="${index}">
+            <div class="mcp-card-head">
+              <div><h2 data-mcp-title>${escapeHtml(item.name || "New connection")}</h2><small data-mcp-kind>Remote HTTP</small></div>
+              <div class="mcp-card-actions">
+                <label class="checkline"><input data-mcp="enabled" type="checkbox" ${item.enabled !== false ? "checked" : ""}/> Enabled</label>
+                <button class="btn ghost sm" onclick="removeMcpConnection(${index})"><span>Remove</span></button>
+              </div>
+            </div>
+            <div class="mcp-card-body">
+              <div class="row">
+                <div class="field"><label>Connection name</label><input data-mcp="name" oninput="updateMcpCardTitle(${index})" value="${escapeHtml(item.name || "")}" placeholder="Notion"/></div>
+                <div class="field"><label>Connection type</label><select data-mcp="transport" onchange="toggleMcpTransport(${index})"><option value="http" ${item.url || !item.command ? "selected" : ""}>Remote HTTP</option><option value="command" ${item.command && !item.url ? "selected" : ""}>Local command</option></select></div>
+              </div>
+              <div data-mcp-section="http" class="field">
+                <label>Server URL</label><input data-mcp="url" value="${escapeHtml(item.url || "")}" placeholder="https://mcp.example.com/server"/>
+              </div>
+              <div data-mcp-section="command">
+                <div class="field"><label>Command</label><input data-mcp="command" value="${escapeHtml(item.command || "")}" placeholder="npx"/></div>
+                <div class="field"><label>Arguments (one per line)</label><textarea data-mcp="args" placeholder="-y&#10;@modelcontextprotocol/server-name">${escapeHtml((item.args || []).join("\n"))}</textarea></div>
+              </div>
+              <details class="mcp-advanced" ${item.required || Object.keys(item.env || {}).length ? "open" : ""}>
+                <summary>Advanced settings</summary>
+                <label class="checkline" style="margin-bottom:14px"><input data-mcp="required" type="checkbox" ${item.required ? "checked" : ""}/> Required for every agent run</label>
+                <div class="field"><label data-mcp-env-label>HTTP headers (KEY=VALUE, one per line)</label><textarea data-mcp="env" placeholder="Authorization=Bearer token">${escapeHtml(Object.entries(item.env || {}).map(([k,v]) => k + "=" + v).join("\n"))}</textarea></div>
+              </details>
+            </div>
+          </div>`).join("");
+        mcpConnections.forEach((_item, index) => toggleMcpTransport(index));
+    }
+
+    function updateMcpCardTitle(index) {
+        const card = document.querySelector(`.mcp-card[data-index="${index}"]`);
+        const name = card.querySelector('[data-mcp="name"]').value.trim();
+        card.querySelector("[data-mcp-title]").textContent = name || "New connection";
+    }
+
+    function toggleMcpTransport(index) {
+        const card = document.querySelector(`.mcp-card[data-index="${index}"]`);
+        if (!card) return;
+        const transport = card.querySelector('[data-mcp="transport"]').value;
+        card.querySelector('[data-mcp-section="http"]').classList.toggle("hide", transport !== "http");
+        card.querySelector('[data-mcp-section="command"]').classList.toggle("hide", transport !== "command");
+        card.querySelector("[data-mcp-kind]").textContent = transport === "http" ? "Remote HTTP" : "Local command";
+        card.querySelector("[data-mcp-env-label]").textContent = transport === "http"
+            ? "HTTP headers (KEY=VALUE, one per line)"
+            : "Environment variables (KEY=VALUE, one per line)";
+    }
+
+    function removeMcpConnection(index) {
+        mcpConnections.splice(index, 1);
+        renderMcpConnections();
+    }
+
+    function readMcpConnections() {
+        const servers = {};
+        document.querySelectorAll(".mcp-card").forEach(card => {
+            const get = key => card.querySelector(`[data-mcp="${key}"]`);
+            const name = get("name").value.trim();
+            if (!name) throw new Error("Every connection needs a name.");
+            const transport = get("transport").value;
+            const env = {};
+            get("env").value.split("\n").map(x => x.trim()).filter(Boolean).forEach(line => {
+                const split = line.indexOf("=");
+                if (split < 1) throw new Error(`${name}: environment lines must use KEY=VALUE.`);
+                env[line.slice(0, split).trim()] = line.slice(split + 1).trim();
+            });
+            servers[name] = {
+                enabled: get("enabled").checked,
+                required: get("required").checked,
+                url: transport === "http" ? get("url").value.trim() || null : null,
+                command: transport === "command" ? get("command").value.trim() || null : null,
+                args: transport === "command" ? get("args").value.split("\n").map(x => x.trim()).filter(Boolean) : [],
+                env
+            };
+        });
+        return servers;
+    }
+
+    async function saveMcpConnections() {
+        const btn = $("mcpSave");
+        try {
+            btn.disabled = true;
+            const data = await api("/api/mcp", {method:"POST", body:JSON.stringify({servers:readMcpConnections()})});
+            mcpConnections = Object.entries(data.servers || {}).map(([name, spec]) => ({name, ...spec}));
+            renderMcpConnections();
+            setMsg("mcpMsg", "Connections saved. New agent runs will receive them.", "ok");
+        } catch (e) {
+            setMsg("mcpMsg", e.message, "bad");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    function planningAgents() {
+        const agents = [];
+        if ($("planClaude").checked) agents.push("claude-code");
+        if ($("planCodex").checked) agents.push("codex");
+        return agents;
+    }
+
+    function briefPayload() {
+        return {
+            repository: $("briefRepo").value.trim(),
+            purpose: $("briefPurpose").value.trim(),
+            goals: $("briefGoals").value.trim(),
+            client_needs: $("briefNeeds").value.trim(),
+            constraints: $("briefConstraints").value.trim(),
+            create_tasks: $("briefCreate").checked,
+            agents: planningAgents(),
+            deep_research: $("planResearch").checked
+        };
+    }
+
+    async function reviewAndPlan() {
+        const agents = planningAgents();
+        if (!agents.length) {
+            setMsg("planMsg", "Pick at least one planning agent.", "bad");
+            return;
+        }
+        const btn = $("planBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin"></span><span>Researching repository...</span>';
+        setMsg("planMsg", `${agents.join(" and ")} ${agents.length > 1 ? "are" : "is"} reading the repository${$("planResearch").checked ? " and researching the stack" : ""}. This takes a few minutes.`, "muted");
+        try {
+            const result = await api("/api/project/plan", {method:"POST", body:JSON.stringify(briefPayload())});
+            const created = new Map((result.created || []).map(x => [x.title, x]));
+            $("planResult").innerHTML = `<div class="card"><h2>Plan</h2><p>${escapeHtml(result.summary || "")}</p>${(result.tasks || []).map(task => {
+                const issue = created.get(task.title);
+                return `<div class="check"><span class="badge ok">${ICON.check}</span><span><b>${escapeHtml(task.title)}</b><small>${escapeHtml(task.priority || "medium")} - branch: ${escapeHtml(task.branch || "separate branch")}${issue ? ` - <a href="${issue.url}" target="_blank">issue #${issue.number}</a>` : ""}</small></span></div>`;
+            }).join("")}</div>`;
+            setMsg("planMsg", (result.created || []).length ? `${result.created.length} GitHub tasks created by ${(result.agents || agents).join(" + ")}.` : "Plan generated without creating tasks.", "ok");
+        } catch (e) {
+            setMsg("planMsg", e.message, "bad");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = "<span>Review repository and create plan</span>";
+        }
+    }
+
+    async function saveRefineSettings() {
+        try {
+            await api("/api/config", {
+                method: "POST", body: JSON.stringify({
+                    planning_auto_refine: $("autoRefine").checked,
+                    planning_refine_batch_size: parseInt($("refineBatch").value) || 5
+                })
+            });
+            setMsg("refineMsg", $("autoRefine").checked
+                ? "Saved. New Todo cards are groomed on the next cycle."
+                : "Saved. Cards are left exactly as they are written on GitHub.", "ok");
+        } catch (e) {
+            setMsg("refineMsg", e.message, "bad");
+        }
+    }
+
+    async function loadBacklog() {
+        try {
+            const data = await api("/api/project/backlog");
+            if (!data.connected) {
+                $("backlogState").innerHTML = `<div class="empty">${escapeHtml(data.error || "Connect a board in Setup to see the backlog.")}</div>`;
+                return;
+            }
+            if (data.auto_refine !== undefined) $("autoRefine").checked = data.auto_refine;
+            if (data.batch_size) $("refineBatch").value = data.batch_size;
+            const pending = data.pending || [];
+            const refined = data.refined || [];
+            $("backlogState").innerHTML = `
+              <div class="stats">
+                <div class="stat"><b>${pending.length}</b><span>cards waiting to be groomed</span></div>
+                <div class="stat"><b>${refined.length}</b><span>groomed recently</span></div>
+              </div>
+              <div class="checks" style="margin-top:14px">
+                ${pending.map(task => `<div class="check"><span class="badge opt">${ICON.warn}</span><span><b>#${task.issue_number} ${escapeHtml(task.title)}</b><small>${escapeHtml(task.repository)} — will be groomed on the next cycle</small></span></div>`).join("")}
+                ${refined.map(item => `<div class="check"><span class="badge ok">${ICON.check}</span><span><b>#${item.issue_number} ${escapeHtml(item.title || "")}</b><small>${escapeHtml(item.repository || "")}${item.branch ? " — workstream " + escapeHtml(item.branch) : ""}${item.changed ? " — rewritten" : " — already precise"}</small></span></div>`).join("")}
+                ${!pending.length && !refined.length ? '<div class="empty">No Todo cards on the board yet.</div>' : ""}
+              </div>`;
+        } catch (e) {
+            $("backlogState").innerHTML = `<div class="errline">${escapeHtml(e.message)}</div>`;
+        }
+    }
+
+    async function refineBacklog() {
+        const agents = planningAgents();
+        if (!agents.length) {
+            setMsg("refineMsg", "Pick at least one agent in the plan card above.", "bad");
+            return;
+        }
+        const btn = $("refineBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin"></span><span>Grooming…</span>';
+        setMsg("refineMsg", `${agents.join(" and ")} ${agents.length > 1 ? "are" : "is"} reading the repository and rewriting the open cards. This takes a few minutes.`, "muted");
+        try {
+            const result = await api("/api/project/backlog/refine", {
+                method: "POST", body: JSON.stringify({
+                    agents, deep_research: $("planResearch").checked,
+                    limit: parseInt($("refineBatch").value) || 5
+                })
+            });
+            const count = (result.refined || []).length;
+            setMsg("refineMsg", count
+                ? `${count} card(s) rewritten on GitHub by ${(result.agents || agents).join(" + ")}.`
+                : "Every open card is already groomed.", "ok");
+            loadBacklog();
+        } catch (e) {
+            setMsg("refineMsg", e.message, "bad");
+        }
+        btn.disabled = false;
+        btn.innerHTML = "<span>Groom the backlog now</span>";
     }
 
     function markTgDirty() {
@@ -1223,7 +1896,9 @@
         const patch = {
             token: secretValue("token"), owner: state.owner,
             default_template: $("template").value, default_agent: $("defaultAgent").value,
+            templates_dir: $("templatesDir").value.trim(), base_branch: $("baseBranch").value.trim(),
             max_parallel: parseInt($("maxParallel").value) || 2,
+            planning_agents: planningAgents(), planning_deep_research: $("planResearch").checked,
             deploy_host: $("depHost").value.trim(), deploy_user: $("depUser").value.trim(),
             deploy_auth_method: $("depAuth").value, deploy_ssh_key_path: $("depKey").value.trim(),
             deploy_domain: $("depDomain").value.trim(),
@@ -1286,12 +1961,23 @@
             $("cols").innerHTML = BOARD_COLS.map(col => {
                 const tasks = b.columns[col] || [];
                 const body = tasks.length ? tasks.map(t => `<div class="run"><div class="t">#${t.issue_number} ${escapeHtml(t.title).slice(0, 48)}</div>
-        <div class="m"><span class="chip">${t.repository.split("/")[1] || t.repository}</span><span class="chip">${t.agent}</span>${t.run_status ? `<span class="chip">${t.run_status}</span>` : ""}${t.phase ? `<span class="chip">${t.phase}</span>` : ""}${t.attempt ? `<span class="chip">attempt ${t.attempt}</span>` : ""}${t.cost_usd ? `<span class="chip">$${t.cost_usd.toFixed(2)}</span>` : ""}${t.pull_request_number ? `<span class="chip">PR #${t.pull_request_number}</span>` : ""}</div>
-        ${t.error ? `<div class="errline">${escapeHtml(t.error).slice(0, 120)}</div>` : ""}</div>`).join("") : `<div class="empty">empty</div>`;
+        <div class="m"><span class="chip">${t.repository.split("/")[1] || t.repository}</span><span class="chip">${t.agent}</span>${t.run_status ? `<span class="chip">${t.run_status}</span>` : ""}${t.phase ? `<span class="chip">${t.phase}</span>` : ""}${t.attempt ? `<span class="chip">attempt ${t.attempt}</span>` : ""}${t.cost_usd ? `<span class="chip">$${t.cost_usd.toFixed(2)}</span>` : ""}${t.pull_request_number ? `<span class="chip">PR #${t.pull_request_number}</span>` : ""}${t.infrastructure ? `<span class="chip">environment</span>` : ""}</div>
+        ${t.error ? `<div class="errline">${escapeHtml(t.error).slice(0, 120)}</div>` : ""}
+        ${t.retryable ? `<button class="btn ghost sm" style="margin-top:9px" onclick="retryTask('${t.project_item_id}', ${t.issue_number})"><span>Retry now</span></button>` : ""}</div>`).join("") : `<div class="empty">empty</div>`;
                 return `<div class="col"><h3>${col}<span class="c">${tasks.length}</span></h3>${body}</div>`;
             }).join("");
         } catch (e) {
         }
+    }
+
+    async function retryTask(itemId, issueNumber) {
+        try {
+            await api("/api/board/retry", {method: "POST", body: JSON.stringify({project_item_id: itemId})});
+            toast(`#${issueNumber} is back in Todo with a fresh set of attempts`, "ok");
+        } catch (e) {
+            toast(e.message, "bad");
+        }
+        refreshRuns();
     }
 
     function escapeHtml(s) {
@@ -1315,6 +2001,30 @@
         }
     }
 
+    async function refreshActivity() {
+        try {
+            const runs = await api("/api/activity");
+            $("activityList").innerHTML = runs.length ? runs.map(run => {
+                const recordedEvents = run.events || [];
+                const sessionEvent = recordedEvents.find(event => event.kind === "init" && event.payload && event.payload.session_id);
+                const sessionId = run.session_id || (sessionEvent && sessionEvent.payload.session_id) || (run.status === "running" ? "starting…" : "not recorded");
+                const events = recordedEvents.slice().reverse();
+                return `<div class="card">
+                  <div class="inline"><b>#${run.issue_number} ${escapeHtml(run.repository)}</b><span class="chip">${escapeHtml(run.agent)}</span><span class="chip">${escapeHtml(run.status)}</span><span class="chip">attempt ${run.attempt}</span></div>
+                  <p class="sub">Session: <code>${escapeHtml(sessionId)}</code>${run.pull_request_number ? ` - PR #${run.pull_request_number}` : ""}</p>
+                  ${run.error ? `<div class="errline">${escapeHtml(run.error)}</div>` : ""}
+                  <div class="checks">${events.map(event => {
+                    const payload = event.payload || {};
+                    const detail = payload.name || payload.text || payload.error || payload.summary || payload.url || payload.session_id || "";
+                    return `<div class="check"><span class="badge ${event.kind === "failed" || event.kind === "error" ? "bad" : "ok"}">${event.kind === "failed" || event.kind === "error" ? ICON.x : ICON.check}</span><span><b>${escapeHtml(event.kind.replaceAll("_", " "))}</b><small>${escapeHtml(String(detail)).slice(0, 260)}</small></span></div>`;
+                  }).join("") || '<div class="empty">No events recorded.</div>'}</div>
+                </div>`;
+            }).join("") : '<div class="card"><div class="empty">No runs recorded yet.</div></div>';
+        } catch (e) {
+            $("activityList").innerHTML = `<div class="card"><div class="errline">${escapeHtml(e.message)}</div></div>`;
+        }
+    }
+
     async function postAnswer(id) {
         const v = $("a-" + id).value.trim();
         if (!v) {
@@ -1330,46 +2040,132 @@
         }
     }
 
+    function clockLabel(iso) {
+        if (!iso) return "never";
+        const when = new Date(iso);
+        if (isNaN(when)) return "never";
+        const seconds = Math.max(0, Math.round((Date.now() - when.getTime()) / 1000));
+        if (seconds < 60) return seconds + "s ago";
+        if (seconds < 3600) return Math.round(seconds / 60) + "m ago";
+        return when.toLocaleTimeString();
+    }
+
     async function refreshLoop() {
+        let l;
         try {
-            const l = await api("/api/loop");
-            const running = l.running;
-            $("loopDot").className = "dot" + (running ? " on" : (l.error ? " err" : ""));
-            $("loopLabel").textContent = running ? "loop running" : (l.error ? "loop error" : "loop paused");
-            const b = $("loopBtn");
-            b.className = "btn sm" + (running ? " stop" : "");
-            b.querySelector("span").textContent = running ? "Stop loop" : "Start loop";
-            b.title = l.blocking && l.blocking.length ? "Not ready: " + l.blocking.join(", ") : "";
-            if (l.last_event && l.last_event.kind) $("dbEvent").textContent = l.last_event.kind + (l.last_event.error ? ": " + l.last_event.error : "");
-            const errBox = $("loopErr");
-            if (l.error) {
-                errBox.classList.remove("hide");
-                errBox.innerHTML = `<div class="check"><span class="badge bad">${ICON.x}</span><span><b>Loop error:</b> ${escapeHtml(l.error)}</span></div>`;
-            } else errBox.classList.add("hide");
+            l = await api("/api/loop");
         } catch (e) {
+            return;
         }
+        state.loop = l;
+        const running = !!l.running;
+        const blocked = (l.blocking || []).length > 0;
+
+        // sidebar
+        $("loopDot").className = "dot" + (running ? " on" : (l.error ? " err" : ""));
+        $("loopLabel").textContent = l.stopping ? "loop finishing" : running ? (l.busy ? "loop working" : "loop running") : (l.error ? "loop error" : "loop paused");
+        [$("loopBtn"), $("loopMainBtn")].forEach(b => {
+            b.className = (b.id === "loopBtn" ? "btn sm" : "btn") + (running ? " stop" : "");
+            b.querySelector("span").textContent = running ? "Stop loop" : "Start loop";
+            b.title = blocked ? "Not ready: " + l.blocking.join(", ") : "";
+        });
+        $("loopPokeBtn").disabled = !running;
+
+        // loop view
+        $("loopRing").style.setProperty("--p", running ? 100 : 0);
+        $("loopRingLabel").textContent = running ? "on" : "off";
+        $("loopState").textContent = l.stopping ? "Finishing the current cycle"
+            : running ? (l.busy ? "Working on a cycle" : "Loop running") : "Loop paused";
+        $("loopDetail").textContent = l.stopping
+            ? "An agent is still running. The loop stops as soon as it returns."
+            : running
+                ? `Polling every ${l.poll_interval_seconds}s${l.started_at ? ", started " + clockLabel(l.started_at) : ""}.`
+                : blocked ? "Fix the checks below, then start the loop." : "Start the loop to let the factory claim Todo cards.";
+        $("loopTicks").textContent = l.ticks || 0;
+        $("loopLast").textContent = clockLabel(l.last_tick_at);
+        $("loopInterval").textContent = (l.poll_interval_seconds || 60) + "s";
+        $("loopParallel").textContent = l.max_parallel || 1;
+
+        const blockBox = $("loopBlocking");
+        blockBox.classList.toggle("hide", !blocked);
+        if (blocked) {
+            blockBox.innerHTML = `<h2>Not ready to start</h2><p class="sub">These required checks fail — the Setup page explains each one.</p>`
+                + l.blocking.map(name => `<div class="check"><span class="badge opt">${ICON.warn}</span><span>${escapeHtml(name)}</span></div>`).join("");
+        }
+
+        const errorBoxes = [$("loopError"), $("loopErr")];
+        errorBoxes.forEach(box => {
+            if (!box) return;
+            box.classList.toggle("hide", !l.error);
+            if (l.error) box.innerHTML = `<div class="check"><span class="badge bad">${ICON.x}</span><span><b>Loop error:</b> ${escapeHtml(l.error)}</span></div>`;
+        });
+
+        if (l.last_event && l.last_event.kind) $("dbEvent").textContent = l.last_event.kind + (l.last_event.error ? ": " + l.last_event.error : "");
+
+        const feed = l.events || [];
+        $("loopFeed").innerHTML = feed.length ? feed.map(event => {
+            const bad = event.kind === "error" || event.kind === "failed";
+            const detail = event.error || event.name || event.text || event.summary || event.url || event.detail || event.run_id || "";
+            return `<div class="check"><span class="badge ${bad ? "bad" : "ok"}">${bad ? ICON.x : ICON.check}</span><span><b>${escapeHtml(String(event.kind).replaceAll("_", " "))}</b><small>${escapeHtml(clockLabel(event.at))}${detail ? " — " + escapeHtml(String(detail)).slice(0, 200) : ""}</small></span></div>`;
+        }).join("") : '<div class="empty">Nothing yet. Start the loop and cycles appear here.</div>';
     }
 
     async function toggleLoop() {
-        const running = $("loopBtn").querySelector("span").textContent.includes("Stop");
+        const running = !!(state.loop && state.loop.running);
+        const buttons = [$("loopBtn"), $("loopMainBtn")];
+        buttons.forEach(b => b.disabled = true);
         try {
-            await api(running ? "/api/loop/stop" : "/api/loop/start", {method: "POST"});
-            toast(running ? "Loop paused" : "Loop started", "ok");
-            refreshLoop();
+            const r = await api(running ? "/api/loop/stop" : "/api/loop/start", {method: "POST"});
+            toast(running ? (r.stopping ? "Stopping after the current cycle" : "Loop paused") : "Loop started", "ok");
         } catch (e) {
             toast(e.message, "bad");
         }
+        buttons.forEach(b => b.disabled = false);
+        refreshLoop();
+    }
+
+    async function pokeLoop() {
+        try {
+            await api("/api/loop/poke", {method: "POST"});
+            toast("Polling the board now", "ok");
+        } catch (e) {
+            toast(e.message, "bad");
+        }
+        refreshLoop();
+    }
+
+    async function saveLoopSettings() {
+        const btn = $("loopSaveBtn");
+        btn.disabled = true;
+        try {
+            await api("/api/config", {
+                method: "POST", body: JSON.stringify({
+                    poll_interval_seconds: parseInt($("loopPoll").value) || 60,
+                    max_attempts: parseInt($("loopAttempts").value) || 3,
+                    max_parallel: parseInt($("loopParallelInput").value) || 2
+                })
+            });
+            setMsg("loopSaveMsg", "Saved. The running loop applies them on its next cycle.", "ok");
+            loadConfig();
+            refreshLoop();
+        } catch (e) {
+            setMsg("loopSaveMsg", e.message, "bad");
+        }
+        btn.disabled = false;
     }
 
     function tick() {
         refreshLoop();
         const v = document.querySelector(".navlink.active").dataset.view;
         if (v === "dashboard") refreshRuns();
+        if (v === "activity") refreshActivity();
         if (v === "questions") refreshQuestions();
+        if (v === "connections") return;
         if (v === "setup") refreshChecks();
     }
 
     loadConfig();
+    loadMcpConnections();
     refreshChecks();
     refreshLoop();
     setInterval(tick, 3500);

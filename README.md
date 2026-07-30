@@ -30,7 +30,9 @@ GitHub Projects board
 - [Install](#install)
 - [First run](#first-run)
 - [Setting up your board](#setting-up-your-board)
-- [The `.template/` folder](#the-template-folder)
+- [Templates: what ships, and what only teaches](#templates-what-ships-and-what-only-teaches)
+- [Planning a project with two agents](#planning-a-project-with-two-agents)
+- [The base branch](#the-base-branch)
 - [Per-project configuration](#per-project-configuration)
 - [How a task flows](#how-a-task-flows)
 - [When the agent asks a question](#when-the-agent-asks-a-question)
@@ -52,11 +54,12 @@ GitHub Projects board
   your machine, signed in with your existing subscriptions. No API keys required.
 - **Isolates every task.** One disposable Docker container per card, with the repository mounted
   and credentials injected — never baked into an image.
-- **Knows your architecture.** Each repository carries a `.template/` folder with its rules, code
-  samples and architectural tests. The agent reads it before writing anything, and the tests
-  reject work that breaks the structure.
-- **Scaffolds empty repositories.** Point it at a repository with no commits and it lays down a
-  complete working project first, then builds the feature on top.
+- **Knows your architecture.** Every template carries rules, code samples and architectural
+  tests. They are staged into the working copy — never committed to your repository — and the
+  agent reads them before writing anything, while the tests reject work that breaks the structure.
+- **Fits the repository it is given.** A codebase that already exists is never restructured — its
+  layout and its own lint/test scripts become the rules. A repository with no code yet gets a
+  complete working project committed into it first, then the feature on top.
 - **Reviews itself.** A second adversarial pass over its own diff before the pull request opens.
 - **Asks instead of guessing.** Ambiguity becomes a question on the issue, not a wrong assumption.
 - **Ships previews.** Every pull request gets its own environment at a real URL; tags promote to
@@ -159,21 +162,62 @@ uv run flywheel run-once      # one pass, useful the first time
 uv run flywheel loop          # keep going
 ```
 
-## The `.template/` folder
+## Templates: what ships, and what only teaches
 
-**This is where you teach the factory your architecture.** It lives inside each target
-repository, is read fresh on every single run, and is meant to change as the project evolves.
+A template has two halves, and the split is the whole point:
 
 ```
-.template/
-├── template.yml            # commands, ports, health check, environments
-├── README.md               # the architectural rules, in prose
-├── samples/                # a complete vertical slice to imitate
-│   ├── README.md
-│   ├── backend/            # entity -> repository -> service -> schema -> route + tests
-│   └── frontend/           # hooks and a page, with i18n
-└── architecture-tests/     # tests that enforce the rules automatically
+templates/<id>/
+├── template.yml            # catalogue entry: id, name, description, ports, environments
+├── template/               # SHIPPED — copied into the repository and committed
+│   ├── backend/  frontend/ # a working FastAPI + Next.js skeleton with tests
+│   ├── .github/workflows/  # CI, preview environments, releases
+│   └── docker-compose*.yml, README.md, .gitignore
+└── guidance/               # NOT SHIPPED — staged as .template/ in the working copy only
+    ├── template.yml        # commands, ports, health check, environments
+    ├── README.md           # the architectural rules, in prose
+    ├── samples/            # a complete vertical slice to imitate
+    └── architecture-tests/ # tests that enforce the rules automatically
 ```
+
+`guidance/` is the factory's instruction to the agent, not the client's source code. It is copied
+into the workspace as `.template/` on **every** run, added to that clone's `.git/info/exclude`,
+and listed in the shipped `.gitignore` — so the agent always reads the current rules while the
+repository only ever receives the product. A repository that keeps its own committed `.template/`
+folder wins: the bundled guidance is never written over it.
+
+**Your own templates:** Setup → *Templates* has two fields that work together — where templates
+come from, and which one is used. Point *Where your templates live* at either a folder of
+template folders or at a single template folder; both do what they look like they do. The
+dropdown then lists what was actually found, bundled and yours together, and names the folder
+each one was read from. Yours win when an id matches a bundled template.
+
+### A repository that already has code is its own template
+
+The first time the factory opens a repository it looks at what is there, and one of two things
+happens:
+
+- **There is already an application.** Nothing is scaffolded and no bundled rules are applied.
+  The repository's own layout becomes the structure to follow, its own `package.json` scripts and
+  `pyproject.toml` tools become the checks that must pass, and the agent is told plainly not to
+  restructure, rename, re-layer or reformat anything the task did not ask about. Your project
+  keeps its principles; the factory adapts to them, not the other way round.
+- **There is no code yet** — an empty repository, or one holding only a README and a licence —
+  **the template is committed into it.** An empty repository gets it as the base branch; a
+  repository that already has commits gets it on the feature branch, so it arrives through a
+  pull request instead of being pushed over your branch. Flywheel also writes
+  `.flywheel/project.yml` with `template: <id>`, which is what keeps the template's rules
+  applying on later runs once the skeleton is real code.
+
+A repository that keeps its own committed `.template/` folder always outranks both.
+
+### The base branch
+
+Setup → *Base branch* names the branch everything is cut from and merged back into — `main`,
+`master`, `dev`, whatever you use. Every feature branch starts at that branch's latest commit and
+every pull request targets it. Leave it blank and each repository's own default branch is used,
+and a repository that does not have the branch you named falls back to its default too, so a
+mixed set of `main` and `master` repositories works without extra configuration.
 
 Each part does a different job:
 
@@ -201,8 +245,43 @@ The agent must make **all** of these pass before it may report success.
 
 Because the factory only reads `template.yml`, it is stack-agnostic. An ASP.NET repository just
 supplies `dotnet build`, `dotnet test` and NetArchTest-based architectural tests — no changes to
-the factory. A repository with no `.template/` still works; the agent falls back to reading the
+the factory. A repository with no guidance still works; the agent falls back to reading the
 existing code and matching it.
+
+## Planning a project with two agents
+
+The **Project brief** page turns a brief into board tasks. Write the purpose, goals, client needs
+and constraints, pick the repository, and press *Review repository and create plan*.
+
+- **Both agents plan.** Claude Code and Codex each read the repository and the brief on their own
+  and return their own plan. Tick either one off if you only want one opinion.
+- **Deep research.** With it on, each agent may search and fetch the web while planning — current
+  library versions, deprecations, the standard approach to the security-sensitive parts — and
+  cites what it used in the task body. It never overrides what the repository already does.
+- **The plans are merged.** Tasks with the same title are one task; the version with the fuller
+  acceptance criteria wins, and anything both agents proposed is listed first. Tasks only one
+  agent thought of are kept.
+The repository list on that page comes from the token and owner already saved in Setup, so a
+brand-new board with no issues on it still lets you create the first task.
+
+### Grooming happens by itself
+
+You do not write tasks for the factory by hand. On every cycle, **before it claims anything**,
+the loop reads the Todo cards straight from GitHub and has the agents rewrite them:
+
+- they re-read the repository and this brief, so a card is reconciled with what already exists;
+- each card comes back with scope, what is out of scope, acceptance criteria as a checklist, the
+  unit and integration tests it needs, and its dependencies on the other cards by number;
+- cards that must ship together are given the same branch/workstream, which is written to the
+  board's `Branch` field;
+- overlap between two cards is called out in both of them;
+- the rewritten text is pushed back to the GitHub issue, and the card is marked so it is groomed
+  once, not every cycle. Delete the `<!-- flywheel:refined -->` line in an issue to have it
+  groomed again.
+
+Write issues however you like — a title and a sentence is enough. The *Backlog grooming* card on
+the Project brief page shows what is queued and what was rewritten, lets you cap how many cards
+are groomed per cycle, run a pass immediately, or switch the whole thing off.
 
 ## Per-project configuration
 
@@ -231,10 +310,13 @@ deploy:
 
 1. **Claim.** The card moves to `In Progress`. A SQLite ledger guarantees one run per card even
    if two polls overlap.
-2. **Prepare.** The repository is cloned into a fresh workspace. If it has no commits, the
-   bootstrap template is laid down first.
-3. **Read the rules.** `.template/` is loaded from the checkout, so the agent always gets the
-   current architecture, not a cached copy.
+2. **Prepare.** The repository is cloned into a fresh workspace and the base branch is resolved.
+   If it holds no application code yet, the bootstrap template is laid down first; if it already
+   has code, nothing is scaffolded and its own conventions are read instead.
+3. **Read the rules.** For a repository the factory scaffolded, the template's guidance is staged
+   as `.template/` in the workspace (git-excluded), so the agent gets the current architecture and
+   the repository never receives it. For a repository that came with its own code, the rules are
+   that code: its layout and its own scripts, with an explicit instruction not to restructure it.
 4. **Implement.** The agent works in the container on `feat/<issue>-<slug>` (or `fix/`, `chore/`,
    from the issue's labels), writing code and tests and running lint, types and the full suite
    until they pass.
@@ -247,6 +329,13 @@ deploy:
 Failures return the card to `Todo` and the next attempt receives the failure log, so it addresses
 the cause instead of repeating itself. After `max_attempts` the card moves to `Blocked` and the
 issue gets a comment explaining why.
+
+**Retries.** A card only spends an attempt on something the agent could have done differently.
+Failures that happen before the agent starts — a workspace that could not be cloned, a factory
+restart, a rate limit or a 503 — are retried on the next cycle with the card's attempts
+untouched, up to `loop.max_infrastructure_retries`. Anything that is failed or `Blocked` also
+has a **Retry now** button on the dashboard, which hands the card its full budget back and puts
+it in `Todo` immediately; the earlier runs stay in the ledger as history.
 
 ## When the agent asks a question
 
@@ -302,8 +391,13 @@ exposes `codex()` / `codex-reply()`, a real agent loop). Claude Code is driven a
 task-execution transport. Both sit behind one interface; the board's `Agent` field is all you set.
 
 **MCP servers for the agent.** Every run gets the GitHub MCP server (scoped to that repository)
-and Playwright, plus anything in your project's `mcp:` block, written out as `.mcp.json` for
-Claude and `config.toml` for Codex. `${VAR}` placeholders resolve from the factory's secrets.
+and Playwright, plus every connection saved on the **Connections** page and anything in your
+project's `mcp:` block. The same set reaches whichever agent the card is routed to, in that
+agent's own vocabulary: Claude Code receives an `--mcp-config` file, and Codex receives
+`-c mcp_servers.<name>=…` overrides — the only form it honours, since a config file passed by
+path is accepted and then ignored. Remote servers carry their headers as `headers` for Claude and
+`http_headers` for Codex, which rejects `env` on an HTTP server. `${VAR}` placeholders resolve
+from the factory's secrets.
 
 ## Command reference
 
@@ -332,6 +426,7 @@ an agent's question and it resumes on the next poll), **r** refreshes, **w** re-
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `github.owner` / `github.project_number` | — | Which board to watch |
+| `github.base_branch` | — | Branch every feature branch is cut from; blank = the repository's own default |
 | `github.status_field` / `agent_field` / `template_field` | `Status` / `Agent` / `Template` | Board field names |
 | `runner.execution_mode` | `container` | `container` or `host` |
 | `runner.auth_mode` | `subscription` | `subscription` or `api_key` |
@@ -340,8 +435,16 @@ an agent's question and it resumes on the next poll), **r** refreshes, **w** re-
 | `runner.timeout_seconds` | `5400` | Per-agent-invocation limit |
 | `loop.poll_interval_seconds` | `60` | Board polling interval |
 | `loop.max_attempts` | `3` | Retries before a card is blocked |
+| `loop.max_infrastructure_retries` | `5` | Free retries for failures the agent never caused |
 | `loop.question_timeout_hours` | `48` | How long a question waits |
+| `loop.auto_start` | `false` | Start the loop when the app opens |
 | `default_template` | `python-fastapi-nextjs` | Used for empty repositories |
+| `templates_dir` | — | A folder of templates, or one template folder; bundled ones stay available |
+| `planning.agents` | `["claude-code", "codex"]` | Who plans a project brief and researches tasks |
+| `planning.deep_research` | `true` | Let the planning agents search the web |
+| `planning.max_turns` | `60` | Turn budget for one planning run |
+| `planning.auto_refine` | `true` | Groom new Todo cards on every cycle, before they are built |
+| `planning.refine_batch_size` | `5` | Cards groomed per cycle |
 
 ## Project layout
 
@@ -364,7 +467,8 @@ flywheel/
 ├── services/              dispatcher, clarification, scaffolding, delivery, loop controller
 └── delivery/              Telegram
 docker/runner.Dockerfile   the container agents run in
-templates/                 bootstrap templates for empty repositories
+templates/<id>/template/   the project skeleton committed into an empty repository
+templates/<id>/guidance/   rules, samples and architecture tests staged for the agent only
 tests/
 ```
 

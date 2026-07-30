@@ -2,7 +2,12 @@
 
 This folder is the authority on how this repository is structured. It is read by every agent
 before it writes a line of code, and the rules below are enforced by the tests in
-`architecture-tests/`. Edit this folder as the project evolves — it is meant to change.
+`architecture-tests/`.
+
+It is guidance, not product. The factory stages it as `.template/` inside the working copy on
+every run and git is told to ignore it, so it never reaches the repository. Never commit it,
+never import from it, and never copy the sample feature into the application. Edit the copy in
+the template folder when the rules themselves need to change.
 
 ## Request flow
 

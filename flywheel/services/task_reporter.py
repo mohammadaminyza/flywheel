@@ -70,18 +70,11 @@ class TaskReporter:
             f"attempt **{run.attempt}**.\n\n**Agent summary:** {summary[:1200]}"
         )
         self._comment(task, f"### Pull request opened\n\n{detail}")
-        try:
-            self._telegram.pull_request_ready(
-                repository=task.repository.full_name,
-                issue_number=task.issue_number,
-                title=task.title,
-                pull_request_url=pull_url,
-                preview_url=None,
-                screenshots=[],
-                summary=summary,
-            )
-        except Exception:  # noqa: BLE001
-            pass
+        self._telegram_update(
+            task,
+            "Pull request opened; checks are running",
+            f"PR #{run.pull_request_number}: {pull_url}\n\n{summary[:700]}",
+        )
 
     def failed(
         self,

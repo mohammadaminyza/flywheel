@@ -91,7 +91,7 @@ def test_reports_lifecycle_to_issue_and_telegram() -> None:
     assert any("Self-review started" in body for body in issues.comments)
     assert any("Pull request opened" in body for body in issues.comments)
     assert any("tests failed" in body for body in issues.comments)
-    assert telegram.calls == ["update", "update", "question", "ready", "failed"]
+    assert telegram.calls == ["update", "update", "question", "update", "failed"]
 
 
 def test_reporting_failures_never_abort_the_task() -> None:

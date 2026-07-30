@@ -7,6 +7,7 @@ from flywheel.domain.enums import AgentKind
 
 
 class McpServerSpec(BaseModel):
+    enabled: bool = True
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)

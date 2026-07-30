@@ -58,8 +58,27 @@ def test_container_command_uses_danger_sandbox_and_config(tmp_path: Path) -> Non
     assert "exec" in command
     assert command[command.index("--sandbox") + 1] == "danger-full-access"
     assert "--skip-git-repo-check" in command
-    assert any("config_file=/run/codex/config.toml" in part for part in command)
     assert "auth.json:/home/agent/.codex/auth.json" in " ".join(command)
+
+
+def test_mcp_servers_are_passed_as_overrides_codex_actually_reads(tmp_path: Path) -> None:
+    from flywheel.mcp.registry import McpRegistry
+
+    overrides = McpRegistry(repository="acme/api", github_token="tok").codex_overrides()
+    runner = CodexRunner(_environment(tmp_path, ExecutionMode.HOST), config_overrides=overrides)
+
+    command = runner.build_command(_spec(tmp_path))
+    resumed = runner.build_command(_spec(tmp_path, resume="thread-9"))
+
+    github = next(part for part in command if part.startswith("mcp_servers.github="))
+    assert command[command.index(github) - 1] == "-c"
+    assert 'command = "github-mcp-server"' in github
+    assert 'GITHUB_PERSONAL_ACCESS_TOKEN = "tok"' in github
+    assert any(part.startswith("mcp_servers.playwright=") for part in command)
+    # A config file passed by path is ignored by codex, so it must never be relied on.
+    assert not any("config_file=" in part for part in command)
+    # Resuming an answered question keeps the same servers.
+    assert any(part.startswith("mcp_servers.github=") for part in resumed)
 
 
 def test_resume_uses_resume_subcommand(tmp_path: Path) -> None:

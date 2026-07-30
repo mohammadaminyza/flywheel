@@ -20,6 +20,22 @@ class IssueService:
         )
         return str(payload["id"])
 
+    def create(self, repository: Repository, title: str, body: str) -> dict[str, Any]:
+        payload: dict[str, Any] = self._client.post(
+            f"/repos/{repository.full_name}/issues",
+            {"title": title, "body": body},
+        )
+        return payload
+
+    def update(
+        self, repository: Repository, issue_number: int, title: str, body: str
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = self._client.patch(
+            f"/repos/{repository.full_name}/issues/{issue_number}",
+            {"title": title, "body": body},
+        )
+        return payload
+
     def ask(
         self,
         repository: Repository,

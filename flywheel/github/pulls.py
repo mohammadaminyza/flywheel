@@ -39,6 +39,34 @@ class PullRequestService:
         )
         return payload[0] if payload else None
 
+    def get(self, repository: Repository, number: int) -> dict[str, Any]:
+        payload: dict[str, Any] = self._client.get(
+            f"/repos/{repository.full_name}/pulls/{number}"
+        )
+        return payload
+
+    def link_issue(
+        self,
+        repository: Repository,
+        pull: dict[str, Any],
+        issue_number: int,
+        summary: str,
+    ) -> dict[str, Any]:
+        marker = f"Closes #{issue_number}"
+        body = str(pull.get("body") or "")
+        if marker not in body:
+            body = body.rstrip() + f"\n\n{marker}"
+            pull = self._client.patch(
+                f"/repos/{repository.full_name}/pulls/{pull['number']}",
+                {"body": body},
+            )
+        self.comment(
+            repository,
+            int(pull["number"]),
+            f"### Linked task #{issue_number}\n\n{summary or 'Additional work was added.'}",
+        )
+        return pull
+
     def body_for(
         self, issue_number: int, result: AgentResult, agent: str, model: str, cost: float
     ) -> str:

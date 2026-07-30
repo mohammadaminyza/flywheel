@@ -38,6 +38,8 @@ jobs:
       - name: Integration tests
         run: uv run pytest tests/integration -q
 
+      # The architecture rules live in the factory's guidance folder, which is deliberately
+      # not committed. The step still runs for repositories that keep their own copy.
       - name: Architecture tests
         run: uv run pytest ../.template/architecture-tests -q
         if: hashFiles('.template/architecture-tests/**') != ''
@@ -53,11 +55,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
 
-      - run: npm ci
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - run: npm run lint
       - run: npx tsc --noEmit
       - run: npm test --if-present
       - run: npm run build
+
+  docker:
+    name: Docker build validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t flywheel-backend-check ./backend
+      - name: Build frontend image
+        run: docker build -t flywheel-frontend-check ./frontend

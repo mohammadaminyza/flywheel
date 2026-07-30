@@ -60,6 +60,14 @@ class GitHubClient:
             )
         return response.json()
 
+    def put(self, path: str, body: dict[str, Any]) -> Any:
+        response = self._client.put(path, json=body)
+        if response.status_code >= 400:
+            raise GitHubError(f"PUT {path} returned {response.status_code}: {response.text[:200]}")
+        if not response.content:
+            return {}
+        return response.json()
+
     def get_bytes(self, path: str) -> bytes | None:
         response = self._client.get(path, follow_redirects=True)
         if response.status_code >= 400:

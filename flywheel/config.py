@@ -6,6 +6,7 @@ import tomlkit
 from pydantic import BaseModel, Field
 
 from flywheel.domain.enums import AgentKind, AuthMode, ExecutionMode, Transport
+from flywheel.domain.project import McpServerSpec
 
 
 def config_dir() -> Path:
@@ -21,10 +22,13 @@ class GitHubSettings(BaseModel):
     owner: str = ""
     project_number: int = 0
     project_title: str = ""
+    base_branch: str = ""
+    """The branch every feature branch is cut from. Empty means "whatever the repo uses"."""
     status_field: str = "Status"
     agent_field: str = "Agent"
     template_field: str = "Template"
     repository_field: str = "Repository"
+    branch_field: str = "Branch"
 
     @property
     def configured(self) -> bool:
@@ -59,7 +63,7 @@ class DeploySettings(BaseModel):
 
     @property
     def configured(self) -> bool:
-        return bool(self.host and self.domain)
+        return bool(self.host and self.domain and self.has_credentials)
 
     @property
     def has_credentials(self) -> bool:
@@ -89,8 +93,35 @@ class TelegramSettings(BaseModel):
 class LoopSettings(BaseModel):
     poll_interval_seconds: int = 60
     max_attempts: int = 3
+    max_infrastructure_retries: int = 5
+    """Retries for failures the agent never caused — a locked workspace, a restart, a 503."""
     question_timeout_hours: int = 48
     auto_start: bool = False
+
+
+class PlanningSettings(BaseModel):
+    """How the factory turns a brief into board tasks."""
+
+    agents: list[AgentKind] = Field(
+        default_factory=lambda: [AgentKind.CLAUDE_CODE, AgentKind.CODEX]
+    )
+    deep_research: bool = True
+    max_turns: int = 60
+    auto_refine: bool = True
+    """Groom new Todo cards with the agents on every loop cycle, before they are built."""
+    refine_batch_size: int = 5
+
+    def selected(self, requested: list[AgentKind] | None = None) -> list[AgentKind]:
+        chosen = list(requested) if requested else list(self.agents)
+        return list(dict.fromkeys(chosen)) or [AgentKind.CLAUDE_CODE]
+
+
+class ProjectBriefSettings(BaseModel):
+    repository: str = ""
+    purpose: str = ""
+    goals: str = ""
+    client_needs: str = ""
+    constraints: str = ""
 
 
 class Settings(BaseModel):
@@ -105,6 +136,9 @@ class Settings(BaseModel):
     deploy: DeploySettings = Field(default_factory=DeploySettings)
     telegram: TelegramSettings = Field(default_factory=TelegramSettings)
     loop: LoopSettings = Field(default_factory=LoopSettings)
+    mcp_servers: dict[str, McpServerSpec] = Field(default_factory=dict)
+    project_brief: ProjectBriefSettings = Field(default_factory=ProjectBriefSettings)
+    planning: PlanningSettings = Field(default_factory=PlanningSettings)
     default_template: str = "python-fastapi-nextjs"
     default_agent: AgentKind = AgentKind.CLAUDE_CODE
     templates_dir: str = ""
@@ -112,10 +146,23 @@ class Settings(BaseModel):
     setup_completed: bool = False
 
     @property
+    def bundled_templates_path(self) -> Path:
+        return Path(__file__).resolve().parent.parent / "templates"
+
+    @property
+    def template_roots(self) -> list[Path]:
+        """Your own templates folder first, the templates shipped with Flywheel last."""
+        roots: list[Path] = []
+        if self.templates_dir.strip():
+            roots.append(Path(self.templates_dir.strip()).expanduser())
+        roots.append(self.bundled_templates_path)
+        return roots
+
+    @property
     def templates_path(self) -> Path:
         if self.templates_dir:
-            return Path(self.templates_dir)
-        return Path(__file__).resolve().parent.parent / "templates"
+            return Path(self.templates_dir).expanduser()
+        return self.bundled_templates_path
 
     @property
     def workspace_path(self) -> Path:
@@ -158,7 +205,11 @@ def load_settings(path: Path | None = None) -> Settings:
 def save_settings(settings: Settings, path: Path | None = None) -> Path:
     target = path or config_path()
     target.parent.mkdir(parents=True, exist_ok=True)
-    payload = settings.model_dump(mode="json", exclude={"templates_path", "workspace_path"})
+    payload = settings.model_dump(
+        mode="json",
+        exclude={"templates_path", "workspace_path"},
+        exclude_none=True,
+    )
     target.write_text(tomlkit.dumps(payload), encoding="utf-8")
     if os.name != "nt":
         target.chmod(0o600)

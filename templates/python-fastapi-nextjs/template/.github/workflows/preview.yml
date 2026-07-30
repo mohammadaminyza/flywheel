@@ -8,12 +8,64 @@ concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-env:
-  REGISTRY: ghcr.io
-  STACK: pr-${{ github.event.pull_request.number }}
-
 jobs:
+  screenshots:
+    name: Browser screenshot
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Build the frontend
+        working-directory: frontend
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          npm run build
+
+      - name: Start the frontend
+        working-directory: frontend
+        run: |
+          npm start > /tmp/flywheel-frontend.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 5 http://127.0.0.1:3000 > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/flywheel-frontend.log
+          exit 1
+
+      - name: Install Playwright
+        run: npm init -y && npm i -D @playwright/test && npx playwright install --with-deps chromium
+
+      - name: Capture screenshots
+        run: |
+          mkdir -p screenshots
+          cat > shot.spec.ts <<'SPEC'
+          import { test, expect } from '@playwright/test';
+          test('home page renders', async ({ page }) => {
+            await page.goto('http://127.0.0.1:3000', { waitUntil: 'networkidle' });
+            await expect(page.locator('body')).toBeVisible();
+            await page.screenshot({ path: 'screenshots/home.png', fullPage: true });
+          });
+          SPEC
+          npx playwright test shot.spec.ts --reporter=list
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
+          if-no-files-found: error
+
   deploy:
+    name: Docker preview deployment
+    if: ${{ vars.DOMAIN != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -23,8 +75,16 @@ jobs:
     environment:
       name: dev
       url: https://pr-${{ github.event.pull_request.number }}.dev.${{ vars.DOMAIN }}
+    env:
+      REGISTRY: ghcr.io
+      STACK: pr-${{ github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Normalize the container repository
+        id: image
+        shell: bash
+        run: echo "repository=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the registry
         uses: docker/login-action@v3
@@ -38,7 +98,7 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository }}/api:${{ env.STACK }}
+          tags: ${{ env.REGISTRY }}/${{ steps.image.outputs.repository }}/api:${{ env.STACK }}
 
       - name: Build and push frontend
         uses: docker/build-push-action@v6
@@ -47,16 +107,18 @@ jobs:
           push: true
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=https://pr-${{ github.event.pull_request.number }}-api.dev.${{ vars.DOMAIN }}
-          tags: ${{ env.REGISTRY }}/${{ github.repository }}/web:${{ env.STACK }}
+          tags: ${{ env.REGISTRY }}/${{ steps.image.outputs.repository }}/web:${{ env.STACK }}
 
       - name: Deploy to the Docker host
         uses: appleboy/ssh-action@v1
+        env:
+          REPOSITORY: ${{ steps.image.outputs.repository }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           password: ${{ secrets.DEPLOY_SSH_PASSWORD }}
-          envs: STACK,REGISTRY
+          envs: STACK,REGISTRY,REPOSITORY
           script: |
             set -e
             export STACK=${{ env.STACK }}
@@ -83,42 +145,3 @@ jobs:
             echo "attempt $attempt: not ready yet"; sleep 10
           done
           echo "preview did not become reachable"; exit 1
-
-      - name: Install Playwright
-        run: npm init -y && npm i -D @playwright/test && npx playwright install --with-deps chromium
-
-      - name: Capture screenshots
-        env:
-          PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.dev.${{ vars.DOMAIN }}
-        run: |
-          mkdir -p screenshots
-          cat > shot.spec.ts <<'SPEC'
-          import { test, expect } from '@playwright/test';
-          const url = process.env.PREVIEW_URL!;
-          test('home page renders', async ({ page }) => {
-            await page.goto(url, { waitUntil: 'networkidle' });
-            await expect(page.locator('body')).toBeVisible();
-            await page.screenshot({ path: 'screenshots/home.png', fullPage: true });
-          });
-          SPEC
-          npx playwright test shot.spec.ts --reporter=list || true
-
-      - name: Upload screenshots
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: screenshots/
-          if-no-files-found: warn
-
-      - name: Comment the preview link on the pull request
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const url = `https://pr-${{ github.event.pull_request.number }}.dev.${{ vars.DOMAIN }}`;
-            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `### Preview environment\n\n${url}\n\nScreenshots are attached to [the workflow run](${run}).`
-            });

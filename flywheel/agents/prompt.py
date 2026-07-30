@@ -18,6 +18,9 @@ Non-negotiable contract for every task:
    request - the factory does that for you.
 6. Do not touch CI configuration, deployment files, or secrets unless the task explicitly
    asks you to.
+7. The `.template/` folder is the factory's guidance for you - rules, reference samples and
+   architecture tests. It is staged in your working directory, git already ignores it, and it
+   must never be committed or copied into the product. Ship the application, not the template.
 
 If a decision is genuinely ambiguous and choosing wrongly would waste the work - an unclear
 acceptance criterion, a missing business rule, a choice between incompatible approaches -
@@ -38,6 +41,41 @@ in the task's acceptance criteria that is not actually implemented.
 
 Fix what you find, then re-run lint, type checks and tests. Report what you fixed.
 If you find nothing worth fixing, say so plainly rather than inventing changes.
+"""
+
+PLANNING_SYSTEM_PROMPT = """You are a senior product engineer planning a software project.
+Work read-only: inspect the repository, README, architecture, tests, open work, and the product
+brief. Do not edit files, commit, push, or create issues. Produce a practical, dependency-aware
+plan made of small tasks that an autonomous coding agent can complete and verify independently.
+Group tasks that must ship together by giving them the same safe Git branch/workstream name.
+Do not invent business requirements that contradict the brief.
+
+Your plan is merged with the plan of a second agent working from the same brief, so name each
+task after the outcome it delivers rather than the order you happened to think of it in.
+
+Your final response must be exactly one JSON object in a ```json code block. Set status to
+"completed", put the plan overview in summary, and populate planned_tasks. Every planned task
+must have title, detailed body with acceptance criteria, branch, and priority. Return the other
+AgentResult collections as empty arrays. Use this exact shape:
+
+```json
+{
+  "status": "completed",
+  "summary": "overview and sequencing rationale",
+  "questions": [],
+  "tests_added": {"unit": [], "integration": []},
+  "files_changed": [],
+  "follow_ups": [],
+  "planned_tasks": [
+    {
+      "title": "focused task title",
+      "body": "context, implementation scope, and testable acceptance criteria",
+      "branch": "feat/shared-workstream-or-unique-task",
+      "priority": "high | medium | low"
+    }
+  ]
+}
+```
 """
 
 
@@ -70,26 +108,51 @@ def _section(title: str, body: str) -> str:
 def build_system_prompt(template: TemplateManifest, project: ProjectConfig) -> str:
     parts = [SYSTEM_PROMPT]
 
+    if template.discovered:
+        parts.append(
+            "# This repository is its own authority\n\n"
+            "There is already an application here, and it was not built from a factory "
+            "template. Its structure, naming, layering, error handling and test style are "
+            "the rules. Read the code around the task before you touch anything, then "
+            "extend it the way its authors would have.\n\n"
+            "- Put new code where the existing code of that kind already lives\n"
+            "- Reuse what is there; do not introduce a second way of doing something\n"
+            "- Do not restructure, rename, re-layer or reformat anything the task did not "
+            "ask you to change, however much you would have built it differently\n"
+            "- Do not import a structure from another project or template into this one\n"
+            "- Match the existing tests: same framework, same layout, same style"
+        )
+
+    if template.sample_tree and template.discovered:
+        parts.append(
+            "# The structure you are extending\n\n"
+            "This is the repository as it stands. New files belong beside their peers.\n\n"
+            f"```\n{template.sample_tree}\n```"
+        )
+
     if template.rules:
         parts.append(
             "# Architectural rules for this repository\n\n"
-            "These come from the repository's `.template/` folder and are the authority on how "
-            "this codebase is structured. They override your own preferences. Violating them "
-            "fails the architectural tests and the task is rejected.\n\n" + template.rules
+            "These come from the `.template/` guidance staged in your working directory and are "
+            "the authority on how this codebase is structured. They override your own "
+            "preferences. Violating them fails the architectural tests and the task is "
+            "rejected.\n\n" + template.rules
         )
 
-    if template.sample_tree:
+    if template.sample_tree and not template.discovered:
         parts.append(
             "# Reference structure\n\n"
-            "The `.template/` folder carries a sample project showing the structure to follow. "
-            "Place new code in the equivalent position for its role.\n\n"
+            "The `.template/` guidance carries a sample project showing the structure to follow. "
+            "Place new code in the equivalent position for its role, in the real application "
+            "folders - never inside `.template/`.\n\n"
             f"```\n{template.sample_tree}\n```"
         )
 
     if template.sample_excerpts:
         parts.append(
             "# Reference code\n\n"
-            "Sample files from `.template/`. Imitate their layering, naming and style.\n\n"
+            "Sample files from the `.template/` guidance. Imitate their layering, naming and "
+            "style; do not copy the sample feature itself into the product.\n\n"
             + template.sample_excerpts
         )
 
@@ -229,6 +292,142 @@ def build_review_prompt(task: Task, template: TemplateManifest, diff_base: str) 
                 "Result",
                 'Commit any fixes to the current branch. Report status "completed" with a '
                 'summary of what you fixed, or "failed" if the change cannot be made sound.',
+            ),
+        ]
+        if part
+    )
+
+
+DEEP_RESEARCH_BLOCK = """Research before you plan. You have web search and web fetch available,
+so use them rather than relying on memory:
+
+- Check the current, released versions and the recommended usage of every framework, library
+  and service this work depends on, and note anything deprecated or renamed.
+- Look up the standard, security-relevant approach for the domain concerns in the brief
+  (authentication, payments, personal data, uploads, rate limits) before designing around them.
+- Prefer primary sources: official documentation, release notes, and the projects' own guides.
+- Cite what you relied on inside the task body as a short "References" list of URLs.
+- Never let research replace reading this repository. What is already in the code wins over
+  anything you read on the web."""
+
+
+def build_project_plan_prompt(
+    repository: str,
+    purpose: str,
+    goals: str,
+    client_needs: str,
+    constraints: str,
+    research: bool = False,
+) -> str:
+    return "\n\n".join(
+        part
+        for part in [
+            f"# Review and plan `{repository}`",
+            _section("Project purpose", purpose),
+            _section("Goals", goals),
+            _section("Client needs", client_needs),
+            _section("Constraints", constraints),
+            _section("Deep research", DEEP_RESEARCH_BLOCK) if research else "",
+            _section(
+                "Planning requirements",
+                "- Inspect the repository before proposing work\n"
+                "- Reconcile the brief with what is already implemented\n"
+                "- Order tasks by dependency and risk\n"
+                "- Include testable acceptance criteria in every task\n"
+                "- Reuse a branch name only when tasks must be delivered in one pull request\n"
+                "- Prefer 3-12 focused tasks over vague epics",
+            ),
+        ]
+        if part
+    )
+
+
+REFINEMENT_SYSTEM_PROMPT = """You are a senior product engineer grooming a real backlog.
+Work read-only: inspect the repository, its tests and its history, then rewrite the issues you
+are given so an autonomous coding agent can implement each one without asking anything. Do not
+edit files, commit, push, or create or close issues — the factory applies your rewrites for you.
+
+You are improving existing work, not inventing new work. Never drop a task, never merge two
+tasks into one, and never replace a task with something the product owner did not ask for. If
+two tasks overlap, say so inside their bodies and keep both.
+
+Your final response must be exactly one JSON object in a ```json code block. Set status to
+"completed", summarise what you changed in summary, and return one entry in planned_tasks for
+every issue you were given, each carrying the issue_number it belongs to. Return the other
+AgentResult collections as empty arrays. Use this exact shape:
+
+```json
+{
+  "status": "completed",
+  "summary": "what you sharpened, what you found already done, what overlaps",
+  "questions": [],
+  "tests_added": {"unit": [], "integration": []},
+  "files_changed": [],
+  "follow_ups": ["anything worth a new task, described but not created"],
+  "planned_tasks": [
+    {
+      "issue_number": 12,
+      "title": "the improved title, or the original one when it was already right",
+      "body": "context, scope, out of scope, acceptance criteria, tests, dependencies",
+      "branch": "feat/shared-workstream-or-unique-task",
+      "priority": "high | medium | low"
+    }
+  ]
+}
+```
+"""
+
+
+def build_backlog_refinement_prompt(
+    repository: str,
+    tasks: list[Task],
+    purpose: str = "",
+    goals: str = "",
+    client_needs: str = "",
+    constraints: str = "",
+    research: bool = False,
+) -> str:
+    """Ask the agents to groom the board's open tasks against the product and the codebase."""
+    backlog: list[str] = []
+    for task in tasks:
+        details = [f"### Issue #{task.issue_number}: {task.title}", f"Status: {task.status.value}"]
+        if task.branch:
+            details.append(f"Branch / workstream: {task.branch}")
+        if task.labels:
+            details.append(f"Labels: {', '.join(task.labels)}")
+        details.append("")
+        details.append((task.body or "_No description was written._").strip())
+        backlog.append("\n".join(details))
+
+    return "\n\n".join(
+        part
+        for part in [
+            f"# Groom the open backlog of `{repository}`",
+            _section(
+                "What to do",
+                "These are the cards the factory is about to build, exactly as they stand on "
+                "the board. Read the repository first, then rewrite each one so it is "
+                "implementable as written.",
+            ),
+            _section("Product purpose", purpose),
+            _section("Goals", goals),
+            _section("Client needs", client_needs),
+            _section("Constraints", constraints),
+            _section("The backlog", "\n\n".join(backlog)),
+            _section("Deep research", DEEP_RESEARCH_BLOCK) if research else "",
+            _section(
+                "How to improve each task",
+                "- Reconcile it with the code that already exists; say plainly when part of "
+                "it is already implemented\n"
+                "- State the scope, the layers or files involved, and what is out of scope\n"
+                "- Turn the intent into testable acceptance criteria as a checklist\n"
+                "- Name the unit and integration tests that must exist before it is done\n"
+                "- Note dependencies on the other issues by number, and order accordingly\n"
+                "- Give tasks that must ship together the same branch/workstream name, and "
+                "keep an existing branch value unless it is clearly wrong\n"
+                "- Flag overlap or duplication between issues inside their bodies\n"
+                "- Keep the author's intent and language; sharpen it, do not replace it\n"
+                "- Leave a task almost untouched when it is already precise",
             ),
         ]
         if part

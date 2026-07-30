@@ -23,6 +23,8 @@ class RunSpec(BaseModel):
     resume_session_id: str | None = None
     max_turns: int = 120
     timeout_seconds: int = 5400
+    research: bool = False
+    """Let the agent search the web while it works — used by planning, not by delivery."""
 
 
 class RunOutcome(BaseModel):
@@ -53,6 +55,8 @@ class Run(BaseModel):
     preview_url: str | None = None
     cost_usd: float = 0.0
     error: str | None = None
+    counts_toward_attempts: bool = True
+    """False when the run never reached the agent — a clone that failed, a restart, a retry."""
     pending_question_comment_id: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

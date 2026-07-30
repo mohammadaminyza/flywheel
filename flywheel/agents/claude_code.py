@@ -15,6 +15,7 @@ DIRECTIVE = (
     "Carry out the task described in the input above, following your system prompt exactly. "
     "End with the JSON result block."
 )
+RESEARCH_TOOLS = "WebSearch WebFetch"
 
 
 class ClaudeCodeRunner:
@@ -51,6 +52,9 @@ class ClaudeCodeRunner:
             command += ["--permission-mode", "bypassPermissions"]
         else:
             command += ["--permission-mode", "acceptEdits"]
+        if spec.research:
+            # Pre-approve the research tools so planning can read the open web unattended.
+            command += ["--allowed-tools", RESEARCH_TOOLS]
         if self._model:
             command += ["--model", self._model]
         if spec.resume_session_id:

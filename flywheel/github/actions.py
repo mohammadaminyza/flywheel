@@ -1,10 +1,13 @@
+import base64
 import io
 import zipfile
 from pathlib import Path
 from typing import Any
 
+from nacl.public import PublicKey, SealedBox
 from pydantic import BaseModel
 
+from flywheel.config import DeploySettings
 from flywheel.domain.task import Repository
 from flywheel.github.client import GitHubClient
 
@@ -99,4 +102,46 @@ class ActionsService:
         if not statuses:
             return None
         url: str | None = statuses[0].get("environment_url")
-        return url
+        return url if url and not url.endswith(".") else None
+
+    def configure_deploy(self, repository: Repository, settings: DeploySettings) -> None:
+        if not settings.configured:
+            return
+        self._set_variable(repository, "DOMAIN", settings.domain)
+        self._set_secret(repository, "DEPLOY_HOST", settings.host)
+        self._set_secret(repository, "DEPLOY_USER", settings.user)
+        self._set_secret(
+            repository,
+            "DEPLOY_SSH_KEY",
+            settings.ssh_key_path and Path(settings.ssh_key_path).expanduser().read_text(
+                encoding="utf-8"
+            )
+            or "",
+        )
+        self._set_secret(repository, "DEPLOY_SSH_PASSWORD", settings.ssh_password)
+
+    def _set_variable(self, repository: Repository, name: str, value: str) -> None:
+        path = f"/repos/{repository.full_name}/actions/variables/{name}"
+        try:
+            self._client.patch(path, {"name": name, "value": value})
+        except Exception:  # variable does not exist yet
+            self._client.post(
+                f"/repos/{repository.full_name}/actions/variables",
+                {"name": name, "value": value},
+            )
+
+    def _set_secret(self, repository: Repository, name: str, value: str) -> None:
+        if not value:
+            return
+        key = self._client.get(
+            f"/repos/{repository.full_name}/actions/secrets/public-key"
+        )
+        public_key = PublicKey(base64.b64decode(key["key"]))
+        encrypted = SealedBox(public_key).encrypt(value.encode("utf-8"))
+        self._client.put(
+            f"/repos/{repository.full_name}/actions/secrets/{name}",
+            {
+                "encrypted_value": base64.b64encode(encrypted).decode("ascii"),
+                "key_id": key["key_id"],
+            },
+        )

@@ -11,6 +11,7 @@ def _item(
     status: str = "Todo",
     agent: str = "claude-code",
     template: str | None = None,
+    branch: str | None = None,
     labels: list[str] | None = None,
 ) -> dict[str, Any]:
     field_values: list[dict[str, Any]] = [
@@ -19,6 +20,8 @@ def _item(
     ]
     if template:
         field_values.append({"text": template, "field": {"name": "Template"}})
+    if branch:
+        field_values.append({"text": branch, "field": {"name": "Branch"}})
     return {
         "id": "ITEM_1",
         "fieldValues": {"nodes": field_values},
@@ -100,6 +103,20 @@ def test_skips_items_without_a_status(settings: GitHubSettings) -> None:
     assert service.tasks() == []
 
 
+def test_repositories_come_from_project_items_even_without_status(
+    settings: GitHubSettings,
+) -> None:
+    incomplete = _item()
+    incomplete["fieldValues"]["nodes"] = []
+    duplicate = _item()
+    client = FakeClient([_payload([incomplete, duplicate])])
+    service = BoardService(client, settings)  # type: ignore[arg-type]
+
+    repositories = service.repositories()
+
+    assert [repository.full_name for repository in repositories] == ["acme/api"]
+
+
 def test_missing_agent_field_uses_the_default_agent(settings: GitHubSettings) -> None:
     from flywheel.domain.enums import AgentKind
 
@@ -128,6 +145,13 @@ def test_branch_prefix_follows_labels(settings: GitHubSettings) -> None:
     service = BoardService(client, settings)  # type: ignore[arg-type]
 
     assert service.tasks()[0].branch_name.startswith("fix/42-")
+
+
+def test_explicit_board_branch_links_tasks_to_a_workstream(settings: GitHubSettings) -> None:
+    client = FakeClient([_payload([_item(branch="feat/shared checkout")])])
+    service = BoardService(client, settings)  # type: ignore[arg-type]
+
+    assert service.tasks()[0].branch_name == "feat/shared-checkout"
 
 
 def test_claimable_filters_to_todo(settings: GitHubSettings) -> None:

@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS runs (
     preview_url TEXT,
     cost_usd REAL NOT NULL DEFAULT 0,
     error TEXT,
+    counts_toward_attempts INTEGER NOT NULL DEFAULT 1,
     pending_question_comment_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -62,9 +63,14 @@ _RUN_COLUMNS = (
     "preview_url",
     "cost_usd",
     "error",
+    "counts_toward_attempts",
     "pending_question_comment_id",
     "created_at",
     "updated_at",
+)
+
+MIGRATIONS = (
+    ("runs", "counts_toward_attempts", "INTEGER NOT NULL DEFAULT 1"),
 )
 
 
@@ -75,7 +81,18 @@ class Ledger:
         self._connection.row_factory = sqlite3.Row
         self._connection.execute("PRAGMA journal_mode=WAL")
         self._connection.executescript(SCHEMA)
+        self._migrate()
         self._connection.commit()
+
+    def _migrate(self) -> None:
+        """Add columns a ledger written by an older version does not have yet."""
+        for table, column, definition in MIGRATIONS:
+            existing = {
+                row["name"]
+                for row in self._connection.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if column not in existing:
+                self._connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def close(self) -> None:
         self._connection.close()
@@ -142,12 +159,33 @@ class Ledger:
             return len(runs)
         return sum(1 for run in runs if run.agent == agent)
 
+    def branch_is_active(self, repository: str, branch: str) -> bool:
+        return any(
+            run.repository == repository and run.branch == branch for run in self.active()
+        )
+
     def attempts_for(self, project_item_id: str) -> int:
+        """How many real attempts this card has spent.
+
+        Runs that never reached the agent — a clone that failed, a restart, anything the
+        user has since retried — are excluded, so infrastructure trouble cannot exhaust a
+        card's budget.
+        """
         row = self._connection.execute(
-            "SELECT COALESCE(MAX(attempt), 0) AS attempts FROM runs WHERE project_item_id = ?",
+            "SELECT COALESCE(MAX(attempt), 0) AS attempts FROM runs "
+            "WHERE project_item_id = ? AND counts_toward_attempts = 1",
             (project_item_id,),
         ).fetchone()
         return int(row["attempts"])
+
+    def reset_attempts(self, project_item_id: str) -> int:
+        """Give a card its full budget back, keeping every run in the history."""
+        cursor = self._connection.execute(
+            "UPDATE runs SET counts_toward_attempts = 0 WHERE project_item_id = ?",
+            (project_item_id,),
+        )
+        self._connection.commit()
+        return int(cursor.rowcount)
 
     def latest_for_item(self, project_item_id: str) -> Run | None:
         row = self._connection.execute(
@@ -155,6 +193,13 @@ class Ledger:
             (project_item_id,),
         ).fetchone()
         return Run(**dict(row)) if row else None
+
+    def recent_for_item(self, project_item_id: str, limit: int = 20) -> list[Run]:
+        rows = self._connection.execute(
+            "SELECT * FROM runs WHERE project_item_id = ? ORDER BY created_at DESC LIMIT ?",
+            (project_item_id, limit),
+        ).fetchall()
+        return [Run(**dict(row)) for row in rows]
 
     def append_event(self, run_id: str, kind: str, payload: dict[str, Any]) -> None:
         self._connection.execute(
@@ -179,8 +224,10 @@ class Ledger:
             (RunStatus.RUNNING.value, RunStatus.PENDING.value),
         ).fetchall()
         for row in rows:
+            # A restart is not the agent's fault, so the card keeps its attempts.
             self._connection.execute(
-                "UPDATE runs SET status = ?, phase = ?, error = ? WHERE id = ?",
+                "UPDATE runs SET status = ?, phase = ?, error = ?, "
+                "counts_toward_attempts = 0 WHERE id = ?",
                 (
                     RunStatus.FAILED.value,
                     RunPhase.FINISHED.value,

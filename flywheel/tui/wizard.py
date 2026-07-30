@@ -200,11 +200,12 @@ class WizardScreen(Screen[bool]):
         )
 
     def _build_template(self, content: Vertical) -> None:
-        path = self.settings.templates_path
         available: list[tuple[str, str]] = []
-        if path.exists():
+        for path in self.settings.template_roots:
+            if not path.exists():
+                continue
             for child in sorted(path.iterdir()):
-                if (child / "template.yml").exists():
+                if (child / "template.yml").exists() and child.name not in dict(available):
                     available.append((child.name, child.name))
         if not available:
             available = [(self.settings.default_template, self.settings.default_template)]

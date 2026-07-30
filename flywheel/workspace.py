@@ -1,11 +1,34 @@
+import os
 import shutil
+import stat
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from flywheel.domain.task import Repository
 from flywheel.services.exceptions import WorkspaceException
 
 EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
+def _force_writable(action: Callable[[str], Any], path: str, _error: Any) -> None:
+    """Git marks objects read-only, and Windows refuses to delete those."""
+    os.chmod(path, stat.S_IWRITE)
+    action(path)
+
+
+def remove_tree(path: Path) -> bool:
+    """Delete a workspace completely. Returns False when something survived.
+
+    `shutil.rmtree(ignore_errors=True)` is what left half-deleted clones behind on Windows:
+    the read-only files under `.git/objects` refuse to go, the error is swallowed, and the
+    next clone dies with "destination path already exists and is not an empty directory".
+    """
+    if not path.exists():
+        return True
+    shutil.rmtree(path, onerror=_force_writable)
+    return not path.exists()
 
 
 def _git(path: Path, *args: str, timeout: int = 300) -> str:
@@ -50,7 +73,54 @@ class Workspace:
         except WorkspaceException:
             return "main"
 
-    def create_branch(self, branch: str) -> None:
+    def has_remote_branch(self, branch: str) -> bool:
+        if not branch:
+            return False
+        try:
+            return bool(_git(self.path, "ls-remote", "--heads", "origin", branch))
+        except WorkspaceException:
+            return False
+
+    def resolve_base(self, preferred: str = "") -> str:
+        """The branch feature work is cut from and merged back into.
+
+        A branch named in Setup wins whenever the repository actually has it; otherwise the
+        repository's own default branch decides, so `master` and `dev` repos keep working.
+        """
+        if preferred and self.has_remote_branch(preferred):
+            return preferred
+        detected = self.default_branch()
+        if self.has_remote_branch(detected):
+            return detected
+        return preferred or detected
+
+    def create_branch(self, branch: str, base: str = "") -> None:
+        """Check out `branch`, continuing an existing one or cutting a new one from `base`."""
+        try:
+            _git(
+                self.path,
+                "fetch",
+                "origin",
+                f"{branch}:refs/remotes/origin/{branch}",
+                timeout=600,
+            )
+            _git(self.path, "checkout", "-B", branch, f"origin/{branch}")
+            return
+        except WorkspaceException:
+            pass
+        if base and base != branch:
+            try:
+                _git(
+                    self.path,
+                    "fetch",
+                    "origin",
+                    f"{base}:refs/remotes/origin/{base}",
+                    timeout=600,
+                )
+                _git(self.path, "checkout", "-B", branch, f"origin/{base}")
+                return
+            except WorkspaceException:
+                pass
         _git(self.path, "checkout", "-B", branch)
 
     def has_changes(self) -> bool:
@@ -143,7 +213,7 @@ class Workspace:
         )
 
     def destroy(self) -> None:
-        shutil.rmtree(self.path, ignore_errors=True)
+        remove_tree(self.path)
 
 
 class WorkspaceFactory:
@@ -151,11 +221,24 @@ class WorkspaceFactory:
         self._root = root
         self._token = token
 
-    def prepare(self, repository: Repository, run_id: str) -> Workspace:
+    def _clean_directory(self, run_id: str) -> Path:
+        """An empty directory to clone into, even when the last one refused to be deleted."""
         path = self._root / run_id
-        if path.exists():
-            shutil.rmtree(path, ignore_errors=True)
-        path.mkdir(parents=True, exist_ok=True)
+        if remove_tree(path):
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        for suffix in range(1, 20):
+            candidate = self._root / f"{run_id}-{suffix}"
+            if remove_tree(candidate):
+                candidate.mkdir(parents=True, exist_ok=True)
+                return candidate
+        raise WorkspaceException(
+            f"could not free a workspace under {self._root}: {path} is still in use. "
+            "Close anything holding files open in it (an editor, a shell, a container)."
+        )
+
+    def prepare(self, repository: Repository, run_id: str) -> Workspace:
+        path = self._clean_directory(run_id)
 
         url = authenticated_url(repository, self._token)
         result = subprocess.run(

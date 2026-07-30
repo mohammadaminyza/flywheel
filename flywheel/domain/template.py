@@ -1,3 +1,5 @@
+import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +69,8 @@ class TemplateManifest(BaseModel):
     id: str = "repository"
     name: str = "Repository template"
     description: str = ""
+    discovered: bool = False
+    """True when this was read off an existing codebase rather than a bundled template."""
     stack: TemplateStack = Field(default_factory=TemplateStack)
     commands: TemplateCommands = Field(default_factory=TemplateCommands)
     ports: TemplatePorts = Field(default_factory=TemplatePorts)
@@ -166,6 +170,210 @@ def load_repository_template(workspace: Path) -> TemplateManifest:
                 )
                 break
     return manifest
+
+
+CODE_SUFFIXES = {
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cs",
+    ".go",
+    ".java",
+    ".kt",
+    ".rb",
+    ".rs",
+    ".php",
+    ".swift",
+    ".vue",
+    ".svelte",
+    ".scala",
+    ".ex",
+    ".dart",
+}
+IGNORED_DIRNAMES = {
+    ".git",
+    ".github",
+    ".idea",
+    ".vscode",
+    TEMPLATE_DIRNAME,
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".next",
+    "dist",
+    "build",
+    "target",
+    "bin",
+    "obj",
+}
+PROJECT_MANIFESTS = (
+    "pyproject.toml",
+    "package.json",
+    "go.mod",
+    "Cargo.toml",
+    "pom.xml",
+    "build.gradle",
+    "Gemfile",
+    "composer.json",
+    "requirements.txt",
+)
+
+
+def _walk(root: Path) -> Iterator[tuple[Path, Path]]:
+    """Every file in the repository that belongs to the product."""
+    for path in root.rglob("*"):
+        relative = path.relative_to(root)
+        if any(part in IGNORED_DIRNAMES for part in relative.parts):
+            continue
+        if path.is_file():
+            yield relative, path
+
+
+def has_code(workspace: Path) -> bool:
+    """Does this repository already contain an application?
+
+    A README, a licence and a CI workflow are not a project. Source files, or a package
+    manifest such as `pyproject.toml` or `package.json`, are.
+    """
+    for relative, path in _walk(workspace):
+        if path.suffix in CODE_SUFFIXES:
+            return True
+        if relative.name in PROJECT_MANIFESTS or relative.suffix in {".csproj", ".sln"}:
+            return True
+    return False
+
+
+def _repository_tree(root: Path, limit: int = 160) -> str:
+    entries: list[str] = []
+    seen_directories: set[Path] = set()
+    for relative, _path in sorted(_walk(root), key=lambda item: item[0].as_posix()):
+        for depth in range(len(relative.parts) - 1):
+            directory = Path(*relative.parts[: depth + 1])
+            if directory not in seen_directories:
+                seen_directories.add(directory)
+                entries.append(f"{'  ' * depth}{directory.name}/")
+        entries.append(f"{'  ' * (len(relative.parts) - 1)}{relative.name}")
+        if len(entries) >= limit:
+            entries.append("... (truncated)")
+            break
+    return "\n".join(entries)
+
+
+def _find_manifest(root: Path, name: str) -> Path | None:
+    """The nearest copy of a manifest: repository root first, then one level down."""
+    candidate = root / name
+    if candidate.is_file():
+        return candidate
+    for child in sorted(root.iterdir()) if root.is_dir() else []:
+        if child.is_dir() and child.name not in IGNORED_DIRNAMES and (child / name).is_file():
+            return child / name
+    return None
+
+
+def _prefixed(manifest: Path, root: Path, command: str) -> str:
+    directory = manifest.parent
+    if directory == root:
+        return command
+    return f"cd {directory.relative_to(root).as_posix()} && {command}"
+
+
+def _python_commands(manifest: Path, root: Path, commands: TemplateCommands) -> None:
+    directory = manifest.parent
+    text = manifest.read_text(encoding="utf-8", errors="replace")
+    runner = ""
+    if (directory / "uv.lock").exists() or "[tool.uv]" in text:
+        runner = "uv run "
+        commands.install.backend = _prefixed(manifest, root, "uv sync --all-extras")
+    elif (directory / "poetry.lock").exists():
+        runner = "poetry run "
+        commands.install.backend = _prefixed(manifest, root, "poetry install")
+    elif (directory / "requirements.txt").exists():
+        commands.install.backend = _prefixed(manifest, root, "pip install -r requirements.txt")
+
+    def add(command: str) -> str:
+        return _prefixed(manifest, root, f"{runner}{command}")
+
+    if "ruff" in text:
+        commands.lint.backend = add("ruff check .")
+    if "mypy" in text:
+        commands.typecheck.backend = add("mypy .")
+    if "pytest" in text or (directory / "tests").is_dir():
+        unit = directory / "tests" / "unit"
+        integration = directory / "tests" / "integration"
+        commands.test_unit.backend = add(f"pytest {'tests/unit' if unit.is_dir() else 'tests'} -q")
+        if integration.is_dir():
+            commands.test_integration.backend = add("pytest tests/integration -q")
+
+
+def _node_commands(manifest: Path, root: Path, commands: TemplateCommands) -> None:
+    directory = manifest.parent
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8", errors="replace"))
+    except json.JSONDecodeError:
+        return
+    scripts = data.get("scripts") if isinstance(data, dict) else None
+    scripts = scripts if isinstance(scripts, dict) else {}
+    runner = "npm run "
+    if (directory / "pnpm-lock.yaml").exists():
+        runner = "pnpm run "
+        commands.install.frontend = _prefixed(manifest, root, "pnpm install")
+    elif (directory / "yarn.lock").exists():
+        runner = "yarn "
+        commands.install.frontend = _prefixed(manifest, root, "yarn install")
+    elif (directory / "package-lock.json").exists():
+        commands.install.frontend = _prefixed(manifest, root, "npm ci")
+    else:
+        commands.install.frontend = _prefixed(manifest, root, "npm install")
+
+    def add(script: str) -> str:
+        return _prefixed(manifest, root, f"{runner}{script}")
+
+    if "lint" in scripts:
+        commands.lint.frontend = add("lint")
+    if "typecheck" in scripts:
+        commands.typecheck.frontend = add("typecheck")
+    elif (directory / "tsconfig.json").exists():
+        commands.typecheck.frontend = _prefixed(manifest, root, "npx tsc --noEmit")
+    if "test" in scripts:
+        commands.test_unit.frontend = add("test")
+    if "build" in scripts:
+        commands.build.frontend = add("build")
+
+
+def describe_repository(workspace: Path, name: str = "") -> TemplateManifest:
+    """Read the conventions of a repository that already has code.
+
+    The existing project is its own template: its layout is the structure to follow and its
+    own scripts are the checks that must pass. Nothing is imposed on it from outside.
+    """
+    commands = TemplateCommands()
+    python = _find_manifest(workspace, "pyproject.toml")
+    node = _find_manifest(workspace, "package.json")
+    if python:
+        _python_commands(python, workspace, commands)
+    if node:
+        _node_commands(node, workspace, commands)
+    stack = TemplateStack(
+        backend="python" if python else None,
+        frontend="node" if node else None,
+    )
+    return TemplateManifest(
+        id="existing-project",
+        name=name or workspace.name,
+        description="Conventions read from the repository itself.",
+        discovered=True,
+        root=workspace,
+        stack=stack,
+        commands=commands,
+        sample_tree=_repository_tree(workspace),
+    )
 
 
 def load_bootstrap_template(templates_dir: Path, template_id: str) -> TemplateManifest:

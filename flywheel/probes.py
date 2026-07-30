@@ -8,7 +8,7 @@ import httpx
 from pydantic import BaseModel
 
 from flywheel.config import Settings
-from flywheel.domain.enums import AgentKind
+from flywheel.domain.enums import AgentKind, ExecutionMode
 
 try:
     import paramiko
@@ -442,30 +442,69 @@ def probe_board(settings: Settings) -> ProbeResult:
 
 
 def probe_templates(settings: Settings) -> ProbeResult:
-    path = settings.templates_path
-    if not path.exists():
+    custom = settings.templates_dir.strip()
+    if custom and not Path(custom).expanduser().is_dir():
         return ProbeResult(
-            name="Templates", ok=False, detail=f"{path} does not exist", fix="Reinstall the factory"
+            name="Templates",
+            ok=False,
+            detail=f"your templates folder {custom} does not exist",
+            fix="Point Setup at an existing folder, or clear it to use the bundled templates",
         )
-    found = sorted(child.name for child in path.iterdir() if (child / "template.yml").exists())
+    found: list[str] = []
+    for root in settings.template_roots:
+        if not root.is_dir():
+            continue
+        found += [
+            child.name
+            for child in sorted(root.iterdir())
+            if (child / "template.yml").exists() and child.name not in found
+        ]
     if not found:
-        return ProbeResult(name="Templates", ok=False, detail="no templates with a template.yml")
+        return ProbeResult(
+            name="Templates",
+            ok=False,
+            detail="no templates with a template.yml",
+            fix="Reinstall the factory, or point Setup at a folder that holds your templates",
+        )
     return ProbeResult(name="Templates", ok=True, detail=", ".join(found))
 
 
 def run_all(settings: Settings) -> list[ProbeResult]:
+    """Every check, with the ones that cannot block this configuration marked optional."""
+    containerised = settings.runner.execution_mode == ExecutionMode.CONTAINER
+    docker = probe_docker()
+    mcp_image = probe_github_mcp_image()
+    runner_image = probe_runner_image(settings.runner.image)
+    for result in (docker, mcp_image, runner_image):
+        # Nothing Docker-shaped can block a factory that runs the agents on the host.
+        result.optional = result.optional or not containerised
+    agents = {
+        AgentKind.CLAUDE_CODE: probe_claude_code(),
+        AgentKind.CODEX: probe_codex(),
+    }
+    for kind, result in agents.items():
+        # An agent only has to work when the board can actually route a card to it.
+        needed = kind == settings.default_agent or kind in settings.planning.agents
+        result.optional = result.optional or not needed
+    if not any(result.ok for result in agents.values()):
+        agents[settings.default_agent].optional = False
     return [
-        probe_docker(),
-        probe_claude_code(),
-        probe_codex(),
+        docker,
+        agents[AgentKind.CLAUDE_CODE],
+        agents[AgentKind.CODEX],
         probe_github_token(settings.github.token),
         probe_board(settings),
-        probe_github_mcp_image(),
-        probe_runner_image(settings.runner.image),
+        mcp_image,
+        runner_image,
         probe_templates(settings),
         probe_deploy_status(settings),
         probe_telegram_status(settings),
     ]
+
+
+def blocking(settings: Settings) -> list[str]:
+    """Names of the checks that must pass before the loop may start."""
+    return [result.name for result in run_all(settings) if not result.ok and not result.optional]
 
 
 def credential_mounts() -> dict[str, str]:

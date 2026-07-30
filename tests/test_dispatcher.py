@@ -94,13 +94,23 @@ class FakeWorkspace:
         self.pushed: list[str] = []
         self.destroyed = False
         self.committed: list[str] = []
+        self.branched_from: list[tuple[str, str]] = []
         path.mkdir(parents=True, exist_ok=True)
+        if not empty:
+            # A repository that already holds an application: the factory must leave its
+            # structure alone rather than scaffolding a template over it.
+            (path / "app").mkdir(exist_ok=True)
+            (path / "app" / "main.py").write_text("print('hello')\n", encoding="utf-8")
 
     def default_branch(self) -> str:
         return "main"
 
-    def create_branch(self, branch: str) -> None:
+    def resolve_base(self, preferred: str = "") -> str:
+        return preferred or self.default_branch()
+
+    def create_branch(self, branch: str, base: str = "") -> None:
         self.branch = branch
+        self.branched_from.append((branch, base))
 
     def has_changes(self) -> bool:
         return False
@@ -172,6 +182,8 @@ def settings(tmp_path: Path) -> Settings:
     created.github.token = "tok"
     created.github.owner = "acme"
     created.github.project_number = 1
+    # Grooming is covered in test_planning.py; these tests are about dispatching work.
+    created.planning.auto_refine = False
     return created
 
 

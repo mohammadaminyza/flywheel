@@ -3,6 +3,7 @@ from pathlib import Path
 
 from flywheel.agents.base import extract_result_from_text
 from flywheel.agents.claude_code import ClaudeCodeRunner
+from flywheel.agents.codex import CodexRunner
 from flywheel.agents.execution import ExecutionEnvironment
 from flywheel.agents.prompt import build_system_prompt, build_task_prompt
 from flywheel.domain.enums import AgentKind, ExecutionMode, TaskStatus, Transport
@@ -94,6 +95,17 @@ def test_resume_passes_session_id(tmp_path: Path) -> None:
     assert command[command.index("--resume") + 1] == "sess-42"
 
 
+def test_codex_resume_uses_resume_supported_options(tmp_path: Path) -> None:
+    runner = CodexRunner(_environment(tmp_path, ExecutionMode.HOST))
+
+    command = runner.build_command(_spec(tmp_path, resume="sess-42"))
+
+    assert command[:3] == ["codex", "exec", "resume"]
+    assert "--sandbox" not in command
+    assert "--dangerously-bypass-approvals-and-sandbox" in command
+    assert command[-2:] == ["sess-42", "-"]
+
+
 def test_stream_events_capture_session_and_cost(tmp_path: Path) -> None:
     runner = ClaudeCodeRunner(_environment(tmp_path, ExecutionMode.HOST))
     from flywheel.domain.run import RunOutcome
@@ -153,10 +165,53 @@ def test_mcp_registry_writes_both_formats(tmp_path: Path) -> None:
     assert claude["mcpServers"]["github"]["env"]["GITHUB_PERSONAL_ACCESS_TOKEN"] == "tok"
     assert "[mcp_servers.github]" in codex
     assert "required = true" in codex
-
     written = registry.write_claude(tmp_path / "mcp.json")
     assert json.loads(written.read_text())["mcpServers"]["playwright"]["command"] == "npx"
 
+
+def test_remote_mcp_secrets_use_the_key_codex_accepts() -> None:
+    from flywheel.domain.project import McpServerSpec
+
+    registry = McpRegistry(
+        repository="acme/api",
+        github_token="tok",
+        project_servers={
+            "notion": McpServerSpec(
+                url="https://mcp.example.test", env={"Authorization": "Bearer s"}
+            )
+        },
+        include_defaults=False,
+    )
+
+    overrides = registry.codex_overrides()
+    config = registry.codex_config()
+
+    # Codex refuses to load a streamable-HTTP server that was handed `env`.
+    assert 'http_headers = {Authorization = "Bearer s"}' in overrides[0]
+    assert "env" not in overrides[0]
+    assert "http_headers" in config
+    # Claude keeps its own vocabulary.
+    assert registry.claude_config()["mcpServers"]["notion"] == {
+        "type": "http",
+        "url": "https://mcp.example.test",
+        "headers": {"Authorization": "Bearer s"},
+    }
+
+
+def test_disabled_mcp_connection_is_not_written(tmp_path: Path) -> None:
+    from flywheel.domain.project import McpServerSpec
+
+    registry = McpRegistry(
+        repository="acme/app",
+        github_token="token",
+        project_servers={
+            "disabled": McpServerSpec(enabled=False, command="never-run")
+        },
+        include_defaults=False,
+    )
+
+    assert "disabled" not in registry.codex_config()
+    assert "disabled" not in registry.claude_config()["mcpServers"]
 
 def test_mcp_registry_resolves_placeholders() -> None:
     from flywheel.domain.project import McpServerSpec

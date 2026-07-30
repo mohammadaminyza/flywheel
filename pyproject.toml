@@ -19,6 +19,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.34",
     "paramiko>=3.4",
+    "pynacl>=1.5",
 ]
 
 [project.scripts]
